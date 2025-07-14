@@ -1,0 +1,157 @@
+-- Upgraded FE Head Hitbox Expander (Real-Time Update)
+-- By ZumHub
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local lp = Players.LocalPlayer
+
+-- Clean up
+pcall(function() game.CoreGui:FindFirstChild("HitboxGUI"):Destroy() end)
+
+-- State
+local enabled = false
+local hitboxSize = 5
+local transparency = 0.5
+
+-- GUI Setup
+local gui = Instance.new("ScreenGui", game.CoreGui)
+gui.Name = "HitboxGUI"
+gui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 220, 0, 190)
+frame.Position = UDim2.new(0.02, 0, 0.4, 0)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Text = "🎯 Head Hitbox GUI"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.BackgroundTransparency = 1
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+
+local toggle = Instance.new("TextButton", frame)
+toggle.Position = UDim2.new(0.1, 0, 0, 35)
+toggle.Size = UDim2.new(0.8, 0, 0, 30)
+toggle.Text = "Enable"
+toggle.BackgroundColor3 = Color3.fromRGB(40, 140, 60)
+toggle.TextColor3 = Color3.new(1, 1, 1)
+toggle.Font = Enum.Font.Gotham
+toggle.TextSize = 16
+
+local sizeLabel = Instance.new("TextLabel", frame)
+sizeLabel.Position = UDim2.new(0.1, 0, 0, 70)
+sizeLabel.Size = UDim2.new(0.8, 0, 0, 20)
+sizeLabel.Text = "Size: 5"
+sizeLabel.TextColor3 = Color3.new(1, 1, 1)
+sizeLabel.BackgroundTransparency = 1
+sizeLabel.Font = Enum.Font.Gotham
+sizeLabel.TextSize = 14
+
+local incSize = Instance.new("TextButton", frame)
+incSize.Position = UDim2.new(0.1, 0, 0, 90)
+incSize.Size = UDim2.new(0.35, 0, 0, 25)
+incSize.Text = "+"
+incSize.BackgroundColor3 = Color3.fromRGB(80, 80, 160)
+incSize.TextColor3 = Color3.new(1, 1, 1)
+incSize.Font = Enum.Font.Gotham
+incSize.TextSize = 16
+
+local decSize = Instance.new("TextButton", frame)
+decSize.Position = UDim2.new(0.55, 0, 0, 90)
+decSize.Size = UDim2.new(0.35, 0, 0, 25)
+decSize.Text = "-"
+decSize.BackgroundColor3 = Color3.fromRGB(80, 80, 160)
+decSize.TextColor3 = Color3.new(1, 1, 1)
+decSize.Font = Enum.Font.Gotham
+decSize.TextSize = 16
+
+local transpLabel = Instance.new("TextLabel", frame)
+transpLabel.Position = UDim2.new(0.1, 0, 0, 120)
+transpLabel.Size = UDim2.new(0.8, 0, 0, 20)
+transpLabel.Text = "Transparency: 0.5"
+transpLabel.TextColor3 = Color3.new(1, 1, 1)
+transpLabel.BackgroundTransparency = 1
+transpLabel.Font = Enum.Font.Gotham
+transpLabel.TextSize = 14
+
+local incTransp = Instance.new("TextButton", frame)
+incTransp.Position = UDim2.new(0.1, 0, 0, 140)
+incTransp.Size = UDim2.new(0.35, 0, 0, 25)
+incTransp.Text = "+"
+incTransp.BackgroundColor3 = Color3.fromRGB(160, 100, 80)
+incTransp.TextColor3 = Color3.new(1, 1, 1)
+incTransp.Font = Enum.Font.Gotham
+incTransp.TextSize = 16
+
+local decTransp = Instance.new("TextButton", frame)
+decTransp.Position = UDim2.new(0.55, 0, 0, 140)
+decTransp.Size = UDim2.new(0.35, 0, 0, 25)
+decTransp.Text = "-"
+decTransp.BackgroundColor3 = Color3.fromRGB(160, 100, 80)
+decTransp.TextColor3 = Color3.new(1, 1, 1)
+decTransp.Font = Enum.Font.Gotham
+decTransp.TextSize = 16
+
+-- Button logic
+incSize.MouseButton1Click:Connect(function()
+    hitboxSize = math.clamp(hitboxSize + 1, 1, 15)
+    sizeLabel.Text = "Size: " .. hitboxSize
+end)
+
+decSize.MouseButton1Click:Connect(function()
+    hitboxSize = math.clamp(hitboxSize - 1, 1, 15)
+    sizeLabel.Text = "Size: " .. hitboxSize
+end)
+
+incTransp.MouseButton1Click:Connect(function()
+    transparency = math.clamp(transparency + 0.1, 0, 1)
+    transpLabel.Text = "Transparency: " .. string.format("%.1f", transparency)
+end)
+
+decTransp.MouseButton1Click:Connect(function()
+    transparency = math.clamp(transparency - 0.1, 0, 1)
+    transpLabel.Text = "Transparency: " .. string.format("%.1f", transparency)
+end)
+
+toggle.MouseButton1Click:Connect(function()
+    enabled = not enabled
+    toggle.Text = enabled and "Disable" or "Enable"
+    toggle.BackgroundColor3 = enabled and Color3.fromRGB(170, 50, 50) or Color3.fromRGB(40, 140, 60)
+
+    if not enabled then
+        -- reset all heads
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= lp and p.Character and p.Character:FindFirstChild("Head") then
+                local head = p.Character.Head
+                head.Size = Vector3.new(2, 1, 1)
+                head.Transparency = 0
+                head.Material = Enum.Material.Plastic
+                head.Color = Color3.fromRGB(255, 255, 255)
+            end
+        end
+    end
+end)
+
+-- Real-time update loop
+RunService.Heartbeat:Connect(function()
+    if enabled then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= lp and p.Character and p.Character:FindFirstChild("Head") then
+                local head = p.Character.Head
+                head.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+                head.Transparency = transparency
+                head.Material = Enum.Material.Neon
+                head.Color = Color3.fromRGB(255, 0, 0)
+                head.CanCollide = false
+                head.Massless = true
+                local mesh = head:FindFirstChildOfClass("SpecialMesh")
+                if mesh then mesh:Destroy() end
+            end
+        end
+    end
+end)
