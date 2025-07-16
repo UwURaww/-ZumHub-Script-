@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ZumHub GUI Maker v3.0</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; background: #1e1e2f; color: white; }
+    h2 { text-align: center; margin: 10px 0; }
+    #tabs, #toolbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; margin: 10px; }
+    button { padding: 8px 12px; background: #333; color: white; border: none; border-radius: 6px; cursor: pointer; }
+    button:hover { background: #555; }
+    #builder, #codeTab { width: 100%; min-height: 400px; border: 2px dashed #555; position: relative; background: #2e2e40; overflow: auto; margin: 10px 0; display: none; }
+    .element { position: absolute; border: 1px solid #fff; background: white; color: black; padding: 2px; border-radius: 4px; cursor: move; touch-action: none; resize: both; overflow: auto; }
+    textarea { width: 95%; height: 300px; margin: 10px auto; display: block; background: #121212; color: #0f0; padding: 10px; border-radius: 6px; border: 1px solid #444; }
+    input[type="color"], input[type="text"], input[type="number"] { margin-left: 10px; }
+    #builder.active, #codeTab.active { display: block; }
+    #propertyEditor { background: #292940; padding: 10px; border-radius: 8px; margin: 10px auto; max-width: 600px; display: none; }
+    #propertyEditor h3 { margin: 0 0 10px 0; }
+    #propertyEditor label { display: block; margin: 5px 0; }
+  </style>
+</head>
+<body>
+  <h2>ZumHub GUI Maker v3.0</h2>
+
+  <div id="tabs">
+    <button onclick="showTab('builder')">🎨 Design</button>
+    <button onclick="showTab('codeTab')">🧠 Code</button>
+  </div>
+
+  <div id="toolbar">
+    <button onclick="addElement('TextButton')">+ TextButton</button>
+    <button onclick="addElement('TextLabel')">+ TextLabel</button>
+    <button onclick="addElement('Frame')">+ Frame</button>
+    <select onchange="applyPreset(this.value)">
+      <option selected disabled>📦 Presets</option>
+      <option value="login">Login Screen</option>
+      <option value="profile">Profile Panel</option>
+    </select>
+    <input type="color" id="colorPicker" value="#ffffff"/>
+    <button onclick="generateLua()">Export as Lua</button>
+    <button onclick="copyCode()">📋 Copy</button>
+    <button onclick="saveLayout()">💾 Save</button>
+    <button onclick="loadLayout()">📂 Load</button>
+  </div>
+
+  <div id="builder" class="active" ontouchstart=""></div>
+
+  <div id="propertyEditor">
+    <h3>Edit Selected Element</h3>
+    <label>Text: <input type="text" id="propText" oninput="updateProps()"></label>
+    <label>Width: <input type="number" id="propWidth" oninput="updateProps()"></label>
+    <label>Height: <input type="number" id="propHeight" oninput="updateProps()"></label>
+    <label>Left: <input type="number" id="propLeft" oninput="updateProps()"></label>
+    <label>Top: <input type="number" id="propTop" oninput="updateProps()"></label>
+    <label>Color: <input type="color" id="propColor" oninput="updateProps()"></label>
+  </div>
+
+  <div id="codeTab">
+    <textarea id="output" placeholder="Lua code will appear here..."></textarea>
+  </div>
+
+  <script>
+    let builder = document.getElementById('builder');
+    let count = 0;
+    let selectedElement = null;
+
+    function showTab(tabId) {
+      document.getElementById('builder').classList.remove('active');
+      document.getElementById('codeTab').classList.remove('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    function addElement(type, presetData = {}) {
+      let el = document.createElement("div");
+      el.className = "element";
+      el.style.left = presetData.left || "20px";
+      el.style.top = presetData.top || (20 + count * 40) + "px";
+      el.style.width = presetData.width || "100px";
+      el.style.height = presetData.height || "30px";
+      el.innerText = presetData.text || type;
+      el.dataset.type = type;
+      el.style.background = presetData.background || document.getElementById("colorPicker").value;
+      el.addEventListener("click", () => selectElement(el));
+      enableDragResize(el);
+      builder.appendChild(el);
+      count++;
+    }
+
+    function selectElement(el) {
+      selectedElement = el;
+      document.getElementById('propText').value = el.innerText;
+      document.getElementById('propWidth').value = parseInt(el.style.width);
+      document.getElementById('propHeight').value = parseInt(el.style.height);
+      document.getElementById('propLeft').value = parseInt(el.style.left);
+      document.getElementById('propTop').value = parseInt(el.style.top);
+      document.getElementById('propColor').value = rgbToHex(el.style.backgroundColor);
+      document.getElementById('propertyEditor').style.display = 'block';
+    }
+
+    function updateProps() {
+      if (!selectedElement) return;
+      selectedElement.innerText = document.getElementById('propText').value;
+      selectedElement.style.width = document.getElementById('propWidth').value + 'px';
+      selectedElement.style.height = document.getElementById('propHeight').value + 'px';
+      selectedElement.style.left = document.getElementById('propLeft').value + 'px';
+      selectedElement.style.top = document.getElementById('propTop').value + 'px';
+      selectedElement.style.background = document.getElementById('propColor').value;
+    }
+
+    function enableDragResize(el) {
+      let offsetX, offsetY;
+      el.addEventListener('mousedown', function(e) {
+        offsetX = e.offsetX;
+        offsetY = e.offsetY;
+        function move(e) {
+          el.style.left = (e.pageX - offsetX) + "px";
+          el.style.top = (e.pageY - offsetY) + "px";
+        }
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', () => document.removeEventListener('mousemove', move), { once: true });
+      });
+    }
+
+    function generateLua() {
+      let output = "";
+      [...builder.children].forEach((el, i) => {
+        const type = el.dataset.type;
+        const name = `${type}${i}`;
+        const left = parseInt(el.style.left);
+        const top = parseInt(el.style.top);
+        const width = parseInt(el.style.width);
+        const height = parseInt(el.style.height);
+        const bg = el.style.background;
+        output += `
+local ${name} = Instance.new("${type}")
+${name}.Size = UDim2.new(0, ${width}, 0, ${height})
+${name}.Position = UDim2.new(0, ${left}, 0, ${top})
+${name}.Text = "${el.innerText}"
+${name}.BackgroundColor3 = Color3.fromRGB(${hexToRgb(bg)})
+${name}.Parent = script.Parent
+`;
+      });
+      document.getElementById("output").value = output;
+      showTab('codeTab');
+    }
+
+    function copyCode() {
+      const text = document.getElementById("output");
+      text.select();
+      document.execCommand("copy");
+    }
+
+    function saveLayout() {
+      const layout = [...builder.children].map(el => ({
+        type: el.dataset.type,
+        left: el.style.left,
+        top: el.style.top,
+        width: el.style.width,
+        height: el.style.height,
+        background: el.style.background,
+        text: el.innerText
+      }));
+      localStorage.setItem("zumhub_gui_layout", JSON.stringify(layout));
+      alert("Layout saved!");
+    }
+
+    function loadLayout() {
+      const layout = JSON.parse(localStorage.getItem("zumhub_gui_layout") || "[]");
+      builder.innerHTML = '';
+      layout.forEach(data => addElement(data.type, data));
+    }
+
+    function applyPreset(name) {
+      if (name === "login") {
+        builder.innerHTML = '';
+        addElement("TextLabel", { text: "Username:", left: "40px", top: "50px" });
+        addElement("TextBox", { text: "", left: "150px", top: "50px", width: "120px" });
+        addElement("TextLabel", { text: "Password:", left: "40px", top: "100px" });
+        addElement("TextBox", { text: "", left: "150px", top: "100px", width: "120px" });
+        addElement("TextButton", { text: "Login", left: "100px", top: "160px", width: "100px" });
+      } else if (name === "profile") {
+        builder.innerHTML = '';
+        addElement("TextLabel", { text: "Player Name", left: "40px", top: "40px" });
+        addElement("Frame", { left: "30px", top: "80px", width: "200px", height: "120px", background: "#ccccff" });
+        addElement("TextButton", { text: "Edit Profile", left: "60px", top: "210px", width: "140px" });
+      }
+    }
+
+    function hexToRgb(hex) {
+      hex = hex.replace("#", "");
+      const bigint = parseInt(hex, 16);
+      const r = (bigint >> 16) & 255;
+      const g = (bigint >> 8) & 255;
+      const b = bigint & 255;
+      return `${r}, ${g}, ${b}`;
+    }
+
+    function rgbToHex(rgb) {
+      if (!rgb) return "#ffffff";
+      const rgbValues = rgb.match(/\d+/g);
+      if (!rgbValues) return "#ffffff";
+      return "#" + rgbValues.map(x => (+x).toString(16).padStart(2, "0")).join("");
+    }
+
+    // Load layout if available
+    loadLayout();
+  </script>
+</body>
+</html>
