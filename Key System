@@ -1,0 +1,111 @@
+-- ⚠️ Requires Executor with HTTP enabled!
+
+local HttpService = game:GetService("HttpService")
+
+--===[ Custom GUI Setup ]===--
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+ScreenGui.Name = "WorkinkKeySystem"
+
+local Frame = Instance.new("Frame", ScreenGui)
+Frame.Size = UDim2.new(0, 300, 0, 160)
+Frame.Position = UDim2.new(0.5, -150, 0.5, -80)
+Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Frame.BorderSizePixel = 0
+Frame.AnchorPoint = Vector2.new(0.5, 0.5)
+Frame.ClipsDescendants = true
+
+local UICorner = Instance.new("UICorner", Frame)
+UICorner.CornerRadius = UDim.new(0, 12)
+
+local Title = Instance.new("TextLabel", Frame)
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "🔐 Enter Access Key"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 20
+Title.BackgroundTransparency = 1
+
+local TextBox = Instance.new("TextBox", Frame)
+TextBox.Size = UDim2.new(0.9, 0, 0, 30)
+TextBox.Position = UDim2.new(0.05, 0, 0, 50)
+TextBox.PlaceholderText = "Paste your key here..."
+TextBox.TextColor3 = Color3.new(1, 1, 1)
+TextBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+TextBox.ClearTextOnFocus = false
+TextBox.Font = Enum.Font.Gotham
+TextBox.TextSize = 16
+
+local UICorner2 = Instance.new("UICorner", TextBox)
+UICorner2.CornerRadius = UDim.new(0, 6)
+
+local Submit = Instance.new("TextButton", Frame)
+Submit.Size = UDim2.new(0.4, 0, 0, 30)
+Submit.Position = UDim2.new(0.3, 0, 0, 95)
+Submit.Text = "Validate"
+Submit.BackgroundColor3 = Color3.fromRGB(45, 130, 230)
+Submit.TextColor3 = Color3.new(1,1,1)
+Submit.Font = Enum.Font.GothamBold
+Submit.TextSize = 16
+
+local UICorner3 = Instance.new("UICorner", Submit)
+UICorner3.CornerRadius = UDim.new(0, 6)
+
+--===[ Animated Notification Function ]===--
+local function showNotification(text, color)
+	local Noti = Instance.new("TextLabel", ScreenGui)
+	Noti.Size = UDim2.new(0, 0, 0, 30)
+	Noti.Position = UDim2.new(0.5, 0, 0.9, 0)
+	Noti.BackgroundColor3 = color
+	Noti.Text = text
+	Noti.TextColor3 = Color3.new(1, 1, 1)
+	Noti.Font = Enum.Font.GothamBold
+	Noti.TextSize = 14
+	Noti.AnchorPoint = Vector2.new(0.5, 0.5)
+
+	local corner = Instance.new("UICorner", Noti)
+	corner.CornerRadius = UDim.new(0, 8)
+
+	Noti:TweenSize(UDim2.new(0, 220, 0, 30), "Out", "Back", 0.3, true)
+	wait(2)
+	Noti:TweenSize(UDim2.new(0, 0, 0, 30), "In", "Quad", 0.3, true)
+	wait(0.3)
+	Noti:Destroy()
+end
+
+--===[ Token Validation Function (Work.ink API) ]===--
+local function validateKey(token)
+	local url = "https://work.ink/_api/v2/token/isValid/" .. token
+	local success, result = pcall(function()
+		return HttpService:JSONDecode(game:HttpGet(url))
+	end)
+
+	if success and result and result.valid and not result.deleted then
+		return true, result.info
+	else
+		return false, nil
+	end
+end
+
+--===[ Button Click Behavior ]===--
+Submit.MouseButton1Click:Connect(function()
+	local inputKey = TextBox.Text
+	if inputKey == "" then
+		showNotification("⚠️ Please enter a key", Color3.fromRGB(200, 50, 50))
+		return
+	end
+
+	showNotification("🔎 Validating...", Color3.fromRGB(230, 180, 50))
+
+	local valid, info = validateKey(inputKey)
+	if valid then
+		showNotification("✅ Key Valid!", Color3.fromRGB(50, 200, 80))
+		
+		wait(0.5)
+		ScreenGui:Destroy()
+
+		-- Load your actual script here
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/UwURaww/ZumHubasset/refs/heads/main/KILL%20SCRIPT%20SWORD%20%26%20TOOLS"))()
+	else
+		showNotification("❌ Invalid or Expired Key", Color3.fromRGB(200, 60, 60))
+	end
+end)
