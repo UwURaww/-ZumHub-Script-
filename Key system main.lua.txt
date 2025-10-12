@@ -1,13 +1,14 @@
--- Main Section (Converted to loadstring)
-local main = loadstring([[
+-- Config Section
+-- Main Section
+local function main()
     local success, err = pcall(function()
-        loadstring(game:HttpGet("]] .. Config.scriptUrl .. [[", true))()
+        loadstring(game:HttpGet(Config.scriptUrl, true))() -- Use scriptUrl from Config
         print("script loaded uerd was here")
     end)
     if not success then
         warn("Internal script failed to load: " .. tostring(err))
     end
-]])
+end
 -- End Main Section
 
 if getgenv().RedExecutorKeySys then return end
@@ -20,7 +21,7 @@ local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
 
 local KeySystemData = {
-    Name = Config.title,
+    Name = Config.title, -- Use title from Config
     Colors = {
         Background = Color3.fromRGB(10, 10, 25),
         BackgroundGradientFrom = Color3.fromRGB(10, 10, 30),
@@ -36,9 +37,9 @@ local KeySystemData = {
     },
     Service = "redexecutor",
     SilentMode = false,
-    DiscordInvite = Config.discordInvite,
+    DiscordInvite = Config.discordInvite, -- Use Discord invite from Config
     WebsiteURL = "https://yourwebsite.com/",
-    FileName = Config.keyFileName
+    FileName = Config.keyFileName -- Use filename from Config
 }
 
 local SoundAssets = {
@@ -81,91 +82,6 @@ local function SmoothTween(obj, time, properties, easingStyle, easingDirection)
     return tween
 end
 
--- Intro GUI
-local function ShowIntro()
-    if not Config.intro.enabled then return end
-
-    local IntroGui = CreateObject("ScreenGui", {
-        Name = "ZumHubIntro",
-        Parent = CoreGui,
-        ResetOnSpawn = false,
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-        DisplayOrder = 998
-    })
-
-    local IntroFrame = CreateObject("Frame", {
-        Name = "IntroFrame",
-        Parent = IntroGui,
-        BackgroundColor3 = Config.intro.backgroundColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1
-    })
-
-    -- Add blur effect if enabled
-    if Config.intro.enableBlur then
-        local blur = CreateObject("BlurEffect", {
-            Name = "IntroBlur",
-            Parent = game:GetService("Lighting"),
-            Size = 24
-        })
-        SmoothTween(blur, Config.intro.duration / 2, {Size = 24})
-        task.spawn(function()
-            task.wait(Config.intro.duration)
-            SmoothTween(blur, Config.intro.duration / 2, {Size = 0})
-            task.wait(Config.intro.duration / 2)
-            blur:Destroy()
-        end)
-    end
-
-    local IntroIcon = CreateObject("ImageLabel", {
-        Name = "IntroIcon",
-        Parent = IntroFrame,
-        BackgroundTransparency = 1,
-        Image = Config.intro.iconId,
-        Position = UDim2.new(0.5, 0, 0.35, 0),
-        Size = Config.intro.iconSize,
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        ImageTransparency = 1
-    })
-
-    local IntroText = CreateObject("TextLabel", {
-        Name = "IntroText",
-        Parent = IntroFrame,
-        BackgroundTransparency = 1,
-        Text = Config.intro.text,
-        Position = UDim2.new(0.5, 0, 0.65, 0),
-        Size = UDim2.new(0, 400, 0, 50),
-        Font = Config.intro.font,
-        TextColor3 = Config.intro.textColor,
-        TextSize = Config.intro.textSize,
-        TextXAlignment = Enum.TextXAlignment.Center,
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        TextTransparency = 1
-    })
-    CreateObject("UIStroke", {Color = Config.intro.textColor, Thickness = 1, Transparency = 0.5, Parent = IntroText})
-
-    -- Play intro sound
-    PlaySound({Id = Config.intro.soundId})
-
-    -- Fade in
-    SmoothTween(IntroFrame, Config.intro.duration / 2, {BackgroundTransparency = 0})
-    SmoothTween(IntroIcon, Config.intro.duration / 2, {ImageTransparency = 0})
-    SmoothTween(IntroText, Config.intro.duration / 2, {TextTransparency = 0})
-
-    -- Wait and fade out
-    task.wait(Config.intro.duration / 2)
-    SmoothTween(IntroFrame, Config.intro.duration / 2, {BackgroundTransparency = 1})
-    SmoothTween(IntroIcon, Config.intro.duration / 2, {ImageTransparency = 1})
-    SmoothTween(IntroText, Config.intro.duration / 2, {TextTransparency = 1})
-
-    task.wait(Config.intro.duration / 2)
-    IntroGui:Destroy()
-end
-
--- Show intro before main GUI
-ShowIntro()
-
 local ScreenGui = CreateObject("ScreenGui", {
     Name = Config.title, Parent = CoreGui, ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 999
 })
@@ -191,7 +107,7 @@ CreateObject("UICorner", {CornerRadius = UDim.new(0, 12), Parent = TitleBar})
 CreateObject("UIStroke", {Color = KeySystemData.Colors.Title, Thickness = 1, Transparency = 0.7, Parent = TitleBar})
 
 local Title = CreateObject("TextLabel", {
-    Name = "Title", Parent = TitleBar, BackgroundTransparency = 1, Text = Config.title,
+    Name = "Title", Parent = TitleBar, BackgroundTransparency = 1, Text = Config.title, -- Use title from Config
     Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 200, 0, 20), Font = Enum.Font.SciFi,
     TextColor3 = KeySystemData.Colors.Title, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center, AnchorPoint = Vector2.new(0.5, 0.5)
 })
@@ -276,146 +192,6 @@ local function AddButtonAnimations(button, stroke)
         SmoothTween(button, 0.2, {BackgroundColor3 = button.Name == "DiscordButton" and KeySystemData.Colors.Discord or KeySystemData.Colors.Button, Size = button.Size - UDim2.new(0, 5, 0, 2)})
     end)
     button.MouseButton1Down:Connect(function() SmoothTween(button, 0.1, {Size = button.Size - UDim2.new(0, 5, 0, 2)}) end)
-    button.MouseButton1Up:Connect(function() SmoothTween(button, 0.1, {Size = button.Size + UDim2.new(0, 5, 0, 2)}) end)
-end
-
-AddButtonAnimations(SubmitButton, submitStroke)
-AddButtonAnimations(GetKeyButton, getKeyStroke)
-AddButtonAnimations(DiscordButton, discordStroke)
-
-KeyInput.Focused:Connect(function() AddGlow(inputStroke) end)
-KeyInput.FocusLost:Connect(function() RemoveGlow(inputStroke) end)
-
-local function ShowStatusMessage(text, color)
-    StatusLabel.Text = text
-    StatusLabel.TextColor3 = color
-    StatusLabel.TextTransparency = 0
-    SmoothTween(StatusLabel, 0.3, {TextTransparency = 0})
-    task.spawn(function()
-        task.wait(3)
-        if StatusLabel.Text == text then SmoothTween(StatusLabel, 0.5, {TextTransparency = 1}) end
-    end)
-end
-
-local function openGetKey()
-    local JunkieKeySystem = loadstring(game:HttpGet("https://junkie-development.de/sdk/JunkieKeySystem.lua"))()
-    local API_KEY = Config.api
-    local PROVIDER = Config.provider
-    local SERVICE = Config.service
-    local link = JunkieKeySystem.getLink(API_KEY, PROVIDER, SERVICE)
-    if link then
-        if setclipboard then
-            setclipboard(link)
-            ShowStatusMessage("Verification link copied!", KeySystemData.Colors.Success)
-            PlaySound(SoundAssets.Success)
-        else
-            ShowStatusMessage("Link: " .. link, KeySystemData.Colors.Success)
-            PlaySound(SoundAssets.Success)
-        end
-    else
-        ShowStatusMessage("Failed to generate link", KeySystemData.Colors.Error)
-        PlaySound(SoundAssets.Error)
-    end
-end
-
-local function validateKey()
-    local userKey = KeyInput.Text:gsub("%s+", "")
-    if not userKey or userKey == "" then
-        ShowStatusMessage("Please enter a key.", KeySystemData.Colors.Error)
-        PlaySound(SoundAssets.AccessDenied)
-        return
-    end
-    ShowStatusMessage("Validating key...", Color3.fromRGB(255, 165, 0))
-    local JunkieKeySystem = loadstring(game:HttpGet("https://junkie-development.de/sdk/JunkieKeySystem.lua"))()
-    local API_KEY = Config.api
-    local SERVICE = Config.service
-    local isValid = JunkieKeySystem.verifyKey(API_KEY, userKey, SERVICE)
-    if isValid then
-        ShowStatusMessage("Key valid! Loading Script...", KeySystemData.Colors.Success)
-        PlaySound(SoundAssets.Success)
-        if writefile then pcall(function() writefile(KeySystemData.FileName, userKey) end) end
-        SmoothTween(MainFrame, 0.5, {Position = UDim2.new(0.5, 0, -0.5, 0), BackgroundTransparency = 1}, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-        task.wait(0.5)
-        ScreenGui:Destroy()
-        main()
-    else
-        ShowStatusMessage("Invalid key. Try again!", KeySystemData.Colors.Error)
-        PlaySound(SoundAssets.AccessDenied)
-    end
-end
-
-SubmitButton.MouseButton1Click:Connect(function()
-    PlaySound(SoundAssets.ButtonClick)
-    validateKey()
-end)
-
-GetKeyButton.MouseButton1Click:Connect(function()
-    PlaySound(SoundAssets.ButtonClick)
-    openGetKey()
-end)
-
-local dragging, dragInput, dragStart, startPos
-local function onInputChanged(input)
-    if input == dragInput and dragging then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        CreateTrail(MainFrame)
-    end
-end
-
-TitleBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
-        input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
-    end
-end)
-
-TitleBar.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end
-end)
-
-UserInputService.InputChanged:Connect(onInputChanged)
-
-DiscordButton.MouseButton1Click:Connect(function()
-    PlaySound(SoundAssets.ButtonClick)
-    local discordUrl = "https://discord.gg/" .. KeySystemData.DiscordInvite
-    if setclipboard then
-        setclipboard(discordUrl)
-        ShowStatusMessage("Copied Discord invite!", KeySystemData.Colors.Discord)
-        PlaySound(SoundAssets.SuccessDiscord)
-    else
-        ShowStatusMessage("Join: " .. discordUrl, KeySystemData.Colors.Discord)
-        PlaySound(SoundAssets.SuccessDiscord)
-    end
-end)
-
-KeyInput.FocusLost:Connect(function(enterPressed)
-    if enterPressed then
-        PlaySound(SoundAssets.ButtonClick)
-        validateKey()
-    end
-end)
-
-if isfile and readfile then
-    local success, savedKey = pcall(function()
-        if isfile(KeySystemData.FileName) then return readfile(KeySystemData.FileName) end
-        return nil
-    end)
-    if success and savedKey and savedKey ~= "" then
-        KeyInput.Text = savedKey
-        task.spawn(validateKey)
-    end
-end
-
-MainFrame.Position = UDim2.new(0.5, 0, 0.5, 100)
-MainFrame.Size = UDim2.new(0, 0, 0, 0)
-MainFrame.BackgroundTransparency = 1
-CreateTrail(MainFrame)
-SmoothTween(MainFrame, 0.7, {Size = UDim2.new(0, 350, 0, 250), Position = UDim2.new(0.5, 0, 0.5, 0), BackgroundTransparency = 0}, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
-SmoothTween(mainStroke, 0.7, {Transparency = 0.2}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-PlaySound(SoundAssets.UIOpen)Size = button.Size - UDim2.new(0, 5, 0, 2)}) end)
     button.MouseButton1Up:Connect(function() SmoothTween(button, 0.1, {Size = button.Size + UDim2.new(0, 5, 0, 2)}) end)
 end
 
