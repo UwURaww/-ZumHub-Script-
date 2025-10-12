@@ -1,22 +1,15 @@
--- Placeholder main script as loadstring (replace with your obscured main script content)
-local MainScriptLoadstring = [[
-    -- Your obscured main script goes here
-    print("Main script loaded successfully!")
-    -- Example: Add your script logic here
-    while wait(1) do
-        print("Running...")
-    end
-]]
-
+-- Config Section
+-- Main Section
 local function main()
     local success, err = pcall(function()
-        loadstring(MainScriptLoadstring)()
-        print("Main script executed")
+        loadstring(game:HttpGet(Config.scriptUrl, true))() -- Use scriptUrl from Config
+        print("script loaded uerd was here")
     end)
     if not success then
-        warn("Failed to execute main script: " .. tostring(err))
+        warn("Internal script failed to load: " .. tostring(err))
     end
 end
+-- End Main Section
 
 if getgenv().RedExecutorKeySys then return end
 getgenv().RedExecutorKeySys = true
@@ -26,6 +19,28 @@ local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
+
+local KeySystemData = {
+    Name = Config.title, -- Use title from Config
+    Colors = {
+        Background = Color3.fromRGB(10, 10, 25),
+        BackgroundGradientFrom = Color3.fromRGB(10, 10, 30),
+        BackgroundGradientTo = Color3.fromRGB(5, 5, 15),
+        Title = Color3.fromRGB(0, 255, 200),
+        InputField = Color3.fromRGB(20, 20, 40),
+        InputFieldBorder = Color3.fromRGB(0, 200, 255),
+        Button = Color3.fromRGB(30, 30, 50),
+        ButtonHover = Color3.fromRGB(50, 50, 80),
+        Error = Color3.fromRGB(255, 80, 80),
+        Success = Color3.fromRGB(80, 255, 100),
+        Discord = Color3.fromRGB(160, 80, 255)
+    },
+    Service = "redexecutor",
+    SilentMode = false,
+    DiscordInvite = Config.discordInvite, -- Use Discord invite from Config
+    WebsiteURL = "https://yourwebsite.com/",
+    FileName = Config.keyFileName -- Use filename from Config
+}
 
 local SoundAssets = {
     UIOpen = {Id = "rbxassetid://6655851046"},
@@ -52,25 +67,23 @@ end
 
 local function CreateObject(class, props)
     local obj = Instance.new(class)
-    for prop, value in pairs(props) do 
-        if prop ~= "Parent" then
-            obj[prop] = value
-        end
+    for prop, value in pairs(props) do
+        if prop ~= "Parent" then obj[prop] = value end
     end
-    if props.Parent then
-        obj.Parent = props.Parent
-    end
+    if props.Parent then obj.Parent = props.Parent end
     return obj
 end
 
 local function SmoothTween(obj, time, properties, easingStyle, easingDirection)
-    local tween = TweenService:Create(obj, TweenInfo.new(time, easingStyle or Enum.EasingStyle.Quad, easingDirection or Enum.EasingDirection.Out), properties)
-    tween:Play()
+    local success, tween = pcall(function()
+        return TweenService:Create(obj, TweenInfo.new(time, easingStyle or Enum.EasingStyle.Quad, easingDirection or Enum.EasingDirection.Out), properties)
+    end)
+    if success then tween:Play() else warn("Tween failed for " .. obj.Name) end
     return tween
 end
 
 local ScreenGui = CreateObject("ScreenGui", {
-    Name = KeySystemData.Name, Parent = CoreGui, ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 999
+    Name = Config.title, Parent = CoreGui, ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 999
 })
 
 if not ScreenGui then
@@ -94,17 +107,11 @@ CreateObject("UICorner", {CornerRadius = UDim.new(0, 12), Parent = TitleBar})
 CreateObject("UIStroke", {Color = KeySystemData.Colors.Title, Thickness = 1, Transparency = 0.7, Parent = TitleBar})
 
 local Title = CreateObject("TextLabel", {
-    Name = "Title", Parent = TitleBar, BackgroundTransparency = 1, Text = title,
+    Name = "Title", Parent = TitleBar, BackgroundTransparency = 1, Text = Config.title, -- Use title from Config
     Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 200, 0, 20), Font = Enum.Font.SciFi,
     TextColor3 = KeySystemData.Colors.Title, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center, AnchorPoint = Vector2.new(0.5, 0.5)
 })
 CreateObject("UIStroke", {Color = KeySystemData.Colors.Title, Thickness = 0.5, Transparency = 0.4, Parent = Title})
-
-local DescriptionLabel = CreateObject("TextLabel", {
-    Name = "DescriptionLabel", Parent = MainFrame, BackgroundTransparency = 1, Text = description,
-    Position = UDim2.new(0.5, 0, 0.45, 0), Size = UDim2.new(0, 280, 0, 20), Font = Enum.Font.SciFi,
-    TextColor3 = Color3.fromRGB(150, 150, 200), TextSize = 12, TextXAlignment = Enum.TextXAlignment.Center, AnchorPoint = Vector2.new(0.5, 0.5)
-})
 
 local KeyInput = CreateObject("TextBox", {
     Name = "KeyInput", Parent = MainFrame, BackgroundColor3 = KeySystemData.Colors.InputField, Text = "",
@@ -207,12 +214,7 @@ local function ShowStatusMessage(text, color)
 end
 
 local function openGetKey()
-    local success, JunkieKeySystem = pcall(loadstring, game:HttpGet("https://junkie-development.de/sdk/JunkieKeySystem.lua"))
-    if not success then
-        warn("Failed to load JunkieKeySystem: " .. tostring(JunkieKeySystem))
-        ShowStatusMessage("Key system failed to load. Check executor settings.", KeySystemData.Colors.Error)
-        return
-    end
+    local JunkieKeySystem = loadstring(game:HttpGet("https://junkie-development.de/sdk/JunkieKeySystem.lua"))()
     local API_KEY = Config.api
     local PROVIDER = Config.provider
     local SERVICE = Config.service
@@ -240,19 +242,14 @@ local function validateKey()
         return
     end
     ShowStatusMessage("Validating key...", Color3.fromRGB(255, 165, 0))
-    local success, JunkieKeySystem = pcall(loadstring, game:HttpGet("https://junkie-development.de/sdk/JunkieKeySystem.lua"))
-    if not success then
-        warn("Failed to load JunkieKeySystem: " .. tostring(JunkieKeySystem))
-        ShowStatusMessage("Key system failed to load. Check executor settings.", KeySystemData.Colors.Error)
-        return
-    end
+    local JunkieKeySystem = loadstring(game:HttpGet("https://junkie-development.de/sdk/JunkieKeySystem.lua"))()
     local API_KEY = Config.api
     local SERVICE = Config.service
     local isValid = JunkieKeySystem.verifyKey(API_KEY, userKey, SERVICE)
     if isValid then
         ShowStatusMessage("Key valid! Loading Script...", KeySystemData.Colors.Success)
         PlaySound(SoundAssets.Success)
-        if writefile then pcall(function() writefile(FileName, userKey) end) end
+        if writefile then pcall(function() writefile(KeySystemData.FileName, userKey) end) end
         SmoothTween(MainFrame, 0.5, {Position = UDim2.new(0.5, 0, -0.5, 0), BackgroundTransparency = 1}, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
         task.wait(0.5)
         ScreenGui:Destroy()
@@ -299,7 +296,7 @@ UserInputService.InputChanged:Connect(onInputChanged)
 
 DiscordButton.MouseButton1Click:Connect(function()
     PlaySound(SoundAssets.ButtonClick)
-    local discordUrl = "https://discord.gg/" .. discordInvite
+    local discordUrl = "https://discord.gg/" .. KeySystemData.DiscordInvite
     if setclipboard then
         setclipboard(discordUrl)
         ShowStatusMessage("Copied Discord invite!", KeySystemData.Colors.Discord)
@@ -319,7 +316,7 @@ end)
 
 if isfile and readfile then
     local success, savedKey = pcall(function()
-        if isfile(FileName) then return readfile(FileName) end
+        if isfile(KeySystemData.FileName) then return readfile(KeySystemData.FileName) end
         return nil
     end)
     if success and savedKey and savedKey ~= "" then
