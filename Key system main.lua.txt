@@ -1,8 +1,7 @@
--- Config Section
 -- Main Section
 local function main()
     local success, err = pcall(function()
-        loadstring(game:HttpGet(Config.scriptUrl, true))() -- Use scriptUrl from Config
+        loadstring(game:HttpGet(Config.scriptUrl, true))()
         print("script loaded uerd was here")
     end)
     if not success then
@@ -21,34 +20,22 @@ local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
 
 local KeySystemData = {
-    Name = Config.title, -- Use title from Config
-    Colors = {
-        Background = Color3.fromRGB(10, 10, 25),
-        BackgroundGradientFrom = Color3.fromRGB(10, 10, 30),
-        BackgroundGradientTo = Color3.fromRGB(5, 5, 15),
-        Title = Color3.fromRGB(0, 255, 200),
-        InputField = Color3.fromRGB(20, 20, 40),
-        InputFieldBorder = Color3.fromRGB(0, 200, 255),
-        Button = Color3.fromRGB(30, 30, 50),
-        ButtonHover = Color3.fromRGB(50, 50, 80),
-        Error = Color3.fromRGB(255, 80, 80),
-        Success = Color3.fromRGB(80, 255, 100),
-        Discord = Color3.fromRGB(160, 80, 255)
-    },
+    Name = Config.title,
+    Colors = Config.colors, -- Use colors from Config
     Service = "redexecutor",
     SilentMode = false,
-    DiscordInvite = Config.discordInvite, -- Use Discord invite from Config
+    DiscordInvite = Config.discordInvite,
     WebsiteURL = "https://yourwebsite.com/",
-    FileName = Config.keyFileName -- Use filename from Config
+    FileName = Config.keyFileName
 }
 
 local SoundAssets = {
-    UIOpen = {Id = "rbxassetid://6655851046"},
-    ButtonClick = {Id = "rbxassetid://6655851046"},
-    Success = {Id = "rbxassetid://6655851046"},
-    SuccessDiscord = {Id = "rbxassetid://6655851046"},
-    Error = {Id = "rbxassetid://6655851046"},
-    AccessDenied = {Id = "rbxassetid://6655851046"}
+    UIOpen = {Id = Config.sounds.uiOpen},
+    ButtonClick = {Id = Config.sounds.buttonClick},
+    Success = {Id = Config.sounds.success},
+    SuccessDiscord = {Id = Config.sounds.successDiscord},
+    Error = {Id = Config.sounds.error},
+    AccessDenied = {Id = Config.sounds.accessDenied}
 }
 
 local function PlaySound(soundData)
@@ -92,67 +79,67 @@ if not ScreenGui then
 end
 
 local MainFrame = CreateObject("Frame", {
-    Name = "MainFrame", Parent = ScreenGui, BackgroundColor3 = KeySystemData.Colors.Background, BorderSizePixel = 0,
+    Name = "MainFrame", Parent = ScreenGui, BackgroundColor3 = Config.colors.background, BorderSizePixel = 0,
     Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, 350, 0, 250), ClipsDescendants = true
 })
 CreateObject("UICorner", {CornerRadius = UDim.new(0, 12), Parent = MainFrame})
-local gradient = CreateObject("UIGradient", {Color = ColorSequence.new(KeySystemData.Colors.BackgroundGradientFrom, KeySystemData.Colors.BackgroundGradientTo), Rotation = 90, Parent = MainFrame})
-local mainStroke = CreateObject("UIStroke", {Parent = MainFrame, Color = KeySystemData.Colors.InputFieldBorder, Thickness = 1.5, Transparency = 0.5})
+local gradient = CreateObject("UIGradient", {Color = ColorSequence.new(Config.colors.backgroundGradientFrom, Config.colors.backgroundGradientTo), Rotation = 90, Parent = MainFrame})
+local mainStroke = CreateObject("UIStroke", {Parent = MainFrame, Color = Config.colors.inputFieldBorder, Thickness = 1.5, Transparency = 0.5})
 
 local TitleBar = CreateObject("Frame", {
     Name = "TitleBar", Parent = MainFrame, BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 0.8,
     Size = UDim2.new(1, 0, 0, 30), BorderSizePixel = 0, Position = UDim2.new(0, 0, 0, 0)
 })
 CreateObject("UICorner", {CornerRadius = UDim.new(0, 12), Parent = TitleBar})
-CreateObject("UIStroke", {Color = KeySystemData.Colors.Title, Thickness = 1, Transparency = 0.7, Parent = TitleBar})
+CreateObject("UIStroke", {Color = Config.colors.title, Thickness = 1, Transparency = 0.7, Parent = TitleBar})
 
 local Title = CreateObject("TextLabel", {
-    Name = "Title", Parent = TitleBar, BackgroundTransparency = 1, Text = Config.title, -- Use title from Config
+    Name = "Title", Parent = TitleBar, BackgroundTransparency = 1, Text = Config.title,
     Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 200, 0, 20), Font = Enum.Font.SciFi,
-    TextColor3 = KeySystemData.Colors.Title, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center, AnchorPoint = Vector2.new(0.5, 0.5)
+    TextColor3 = Config.colors.title, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center, AnchorPoint = Vector2.new(0.5, 0.5)
 })
-CreateObject("UIStroke", {Color = KeySystemData.Colors.Title, Thickness = 0.5, Transparency = 0.4, Parent = Title})
+CreateObject("UIStroke", {Color = Config.colors.title, Thickness = 0.5, Transparency = 0.4, Parent = Title})
 
 local KeyInput = CreateObject("TextBox", {
-    Name = "KeyInput", Parent = MainFrame, BackgroundColor3 = KeySystemData.Colors.InputField, Text = "",
+    Name = "KeyInput", Parent = MainFrame, BackgroundColor3 = Config.colors.inputField, Text = "",
     PlaceholderText = "Enter your key here...", Position = UDim2.new(0.5, 0, 0.32, 0), Size = UDim2.new(0, 280, 0, 35),
     Font = Enum.Font.SciFi, TextSize = 14, TextColor3 = Color3.fromRGB(220, 220, 255), PlaceholderColor3 = Color3.fromRGB(100, 100, 150),
     TextXAlignment = Enum.TextXAlignment.Left, AnchorPoint = Vector2.new(0.5, 0), ClipsDescendants = true, ClearTextOnFocus = false
 })
 CreateObject("UICorner", {CornerRadius = UDim.new(0, 8), Parent = KeyInput})
-local inputStroke = CreateObject("UIStroke", {Parent = KeyInput, Color = KeySystemData.Colors.InputFieldBorder, Thickness = 1.5, Transparency = 0.6})
+local inputStroke = CreateObject("UIStroke", {Parent = KeyInput, Color = Config.colors.inputFieldBorder, Thickness = 1.5, Transparency = 0.6})
 CreateObject("UIPadding", {Parent = KeyInput, PaddingLeft = UDim.new(0, 10)})
 
 local SubmitButton = CreateObject("TextButton", {
-    Name = "ValidateButton", Parent = MainFrame, BackgroundColor3 = KeySystemData.Colors.Button, BorderSizePixel = 0,
+    Name = "ValidateButton", Parent = MainFrame, BackgroundColor3 = Config.colors.button, BorderSizePixel = 0,
     Position = UDim2.new(0.3, 0, 0.55, 0), Size = UDim2.new(0, 110, 0, 32), Text = "Verify Key",
-    Font = Enum.Font.SciFi, TextSize = 14, TextColor3 = KeySystemData.Colors.Title, AutoButtonColor = false, AnchorPoint = Vector2.new(0.5, 0)
+    Font = Enum.Font.SciFi, TextSize = 14, TextColor3 = Config.colors.title, AutoButtonColor = false, AnchorPoint = Vector2.new(0.5, 0)
 })
 CreateObject("UICorner", {CornerRadius = UDim.new(0, 8), Parent = SubmitButton})
-local submitStroke = CreateObject("UIStroke", {Parent = SubmitButton, Color = KeySystemData.Colors.InputFieldBorder, Thickness = 1.5, Transparency = 0.6})
+local submitStroke = CreateObject("UIStroke", {Parent = SubmitButton, Color = Config.colors.inputFieldBorder, Thickness = 1.5, Transparency = 0.6})
 
 local GetKeyButton = CreateObject("TextButton", {
-    Name = "GetKeyButton", Parent = MainFrame, BackgroundColor3 = KeySystemData.Colors.Button, BorderSizePixel = 0,
+    Name = "GetKeyButton", Parent = MainFrame, BackgroundColor3 = Config.colors.button, BorderSizePixel = 0,
     Position = UDim2.new(0.7, 0, 0.55, 0), Size = UDim2.new(0, 110, 0, 32), Text = "Get Key",
-    Font = Enum.Font.SciFi, TextSize = 14, TextColor3 = KeySystemData.Colors.Title, AutoButtonColor = false, AnchorPoint = Vector2.new(0.5, 0)
+    Font = Enum.Font.SciFi, TextSize = 14, TextColor3 = Config.colors.title, AutoButtonColor = false, AnchorPoint = Vector2.new(0.5, 0)
 })
 CreateObject("UICorner", {CornerRadius = UDim.new(0, 8), Parent = GetKeyButton})
-local getKeyStroke = CreateObject("UIStroke", {Parent = GetKeyButton, Color = KeySystemData.Colors.InputFieldBorder, Thickness = 1.5, Transparency = 0.6})
+local getKeyStroke = CreateObject("UIStroke", {Parent = GetKeyButton, Color = Config.colors.inputFieldBorder, Thickness = 1.5, Transparency = 0.6})
 
 local DiscordButton = CreateObject("TextButton", {
-    Name = "DiscordButton", Parent = MainFrame, BackgroundColor3 = KeySystemData.Colors.Discord, BorderSizePixel = 0,
+    Name = "DiscordButton", Parent = MainFrame, BackgroundColor3 = Config.colors.discord, BorderSizePixel = 0,
     Position = UDim2.new(0.5, 0, 0.75, 0), Size = UDim2.new(0, 220, 0, 32), Text = "Join Discord",
     Font = Enum.Font.SciFi, TextSize = 14, TextColor3 = Color3.fromRGB(255, 255, 255), AutoButtonColor = false, AnchorPoint = Vector2.new(0.5, 0)
 })
 CreateObject("UICorner", {CornerRadius = UDim.new(0, 8), Parent = DiscordButton})
-local discordStroke = CreateObject("UIStroke", {Parent = DiscordButton, Color = KeySystemData.Colors.Discord, Thickness = 1.5, Transparency = 0.6})
+local discordStroke = CreateObject("UIStroke", {Parent = DiscordButton, Color = Config.colors.discord, Thickness = 1.5, Transparency = 0.6})
 
 local StatusLabel = CreateObject("TextLabel", {
     Name = "StatusLabel", Parent = MainFrame, BackgroundTransparency = 1, Position = UDim2.new(0.5, 0, 0.9, 0),
-    Size = UDim2.new(0, 280, 0, 20), Font = Enum.Font.SciFi, Text = "", TextColor3 = KeySystemData.Colors.Error,
+    Size = UDim2.new(0, 280, 0, 20), Font = Enum.Font.SciFi, Text = "", TextColor3 = Config.colors.error,
     TextSize = 12, TextXAlignment = Enum.TextXAlignment.Center, AnchorPoint = Vector2.new(0.5, 0), TextTransparency = 1
 })
-CreateObject("UIStroke", {Parent = StatusLabel, Color = KeySystemData.Colors.Error, Thickness = 1, Transparency = 0.5})
+CreateObject("UIStroke", {Parent = StatusLabel, Color = Config.colors.error, Thickness = 1, Transparency = 0.5})
 
 local function CreateTrail(frame)
     local success, trail = pcall(function()
@@ -161,12 +148,12 @@ local function CreateTrail(frame)
         trail.Parent = ScreenGui
         trail.ZIndex = frame.ZIndex - 1
         trail:ClearAllChildren()
-        trail.BackgroundColor3 = KeySystemData.Colors.InputFieldBorder
+        trail.BackgroundColor3 = Config.colors.inputFieldBorder
         trail.BackgroundTransparency = 0.7
         trail.Size = frame.Size
         trail.Position = frame.Position
         trail.AnchorPoint = frame.AnchorPoint
-        CreateObject("UIGradient", {Color = ColorSequence.new(KeySystemData.Colors.InputFieldBorder, Color3.fromRGB(0, 0, 0)), Rotation = 90, Parent = trail})
+        CreateObject("UIGradient", {Color = ColorSequence.new(Config.colors.inputFieldBorder, Color3.fromRGB(0, 0, 0)), Rotation = 90, Parent = trail})
         SmoothTween(trail, 0.5, {BackgroundTransparency = 1, Size = frame.Size * 1.1}, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
         task.delay(0.5, function() trail:Destroy() end)
         return trail
@@ -185,13 +172,167 @@ end
 local function AddButtonAnimations(button, stroke)
     button.MouseEnter:Connect(function()
         AddGlow(stroke)
-        SmoothTween(button, 0.2, {BackgroundColor3 = KeySystemData.Colors.ButtonHover, Size = button.Size + UDim2.new(0, 5, 0, 2)})
+        SmoothTween(button, 0.2, {BackgroundColor3 = Config.colors.buttonHover, Size = button.Size + UDim2.new(0, 5, 0, 2)})
     end)
     button.MouseLeave:Connect(function()
         RemoveGlow(stroke)
-        SmoothTween(button, 0.2, {BackgroundColor3 = button.Name == "DiscordButton" and KeySystemData.Colors.Discord or KeySystemData.Colors.Button, Size = button.Size - UDim2.new(0, 5, 0, 2)})
+        SmoothTween(button, 0.2, {BackgroundColor3 = button.Name == "DiscordButton" and Config.colors.discord or Config.colors.button, Size = button.Size - UDim2.new(0, 5, 0, 2)})
     end)
     button.MouseButton1Down:Connect(function() SmoothTween(button, 0.1, {Size = button.Size - UDim2.new(0, 5, 0, 2)}) end)
+    button.MouseButton1Up:Connect(function() SmoothTween(button, 0.1, {Size = button.Size + UDim2.new(0, 5, 0, 2)}) end)
+end
+
+AddButtonAnimations(SubmitButton, submitStroke)
+AddButtonAnimations(GetKeyButton, getKeyStroke)
+AddButtonAnimations(DiscordButton, discordStroke)
+
+KeyInput.Focused:Connect(function() AddGlow(inputStroke) end)
+KeyInput.FocusLost:Connect(function() RemoveGlow(inputStroke) end)
+
+local function ShowStatusMessage(text, color)
+    StatusLabel.Text = text
+    StatusLabel.TextColor3 = color
+    StatusLabel.TextTransparency = 0
+    SmoothTween(StatusLabel, 0.3, {TextTransparency = 0})
+    task.spawn(function()
+        task.wait(3)
+        if StatusLabel.Text == text then SmoothTween(StatusLabel, 0.5, {TextTransparency = 1}) end
+    end)
+end
+
+local function openGetKey()
+    local success, JunkieKeySystem = pcall(function()
+        return loadstring(game:HttpGet("https://junkie-development.de/sdk/JunkieKeySystem.lua"))()
+    end)
+    if not success or not JunkieKeySystem then
+        ShowStatusMessage("Failed to load key system", Config.colors.error)
+        PlaySound(SoundAssets.Error)
+        return
+    end
+    local API_KEY = Config.api
+    local PROVIDER = Config.provider
+    local SERVICE = Config.service
+    local link = JunkieKeySystem.getLink(API_KEY, PROVIDER, SERVICE)
+    if link then
+        if setclipboard then
+            setclipboard(link)
+            ShowStatusMessage("Verification link copied!", Config.colors.success)
+            PlaySound(SoundAssets.Success)
+        else
+            ShowStatusMessage("Link: " .. link, Config.colors.success)
+            PlaySound(SoundAssets.Success)
+        end
+    else
+        ShowStatusMessage("Failed to generate link", Config.colors.error)
+        PlaySound(SoundAssets.Error)
+    end
+end
+
+local function validateKey()
+    local userKey = KeyInput.Text:gsub("%s+", "")
+    if not userKey or userKey == "" then
+        ShowStatusMessage("Please enter a key.", Config.colors.error)
+        PlaySound(SoundAssets.AccessDenied)
+        return
+    end
+    ShowStatusMessage("Validating key...", Color3.fromRGB(255, 165, 0))
+    local success, JunkieKeySystem = pcall(function()
+        return loadstring(game:HttpGet("https://junkie-development.de/sdk/JunkieKeySystem.lua"))()
+    end)
+    if not success or not JunkieKeySystem then
+        ShowStatusMessage("Failed to load key system", Config.colors.error)
+        PlaySound(SoundAssets.Error)
+        return
+    end
+    local API_KEY = Config.api
+    local SERVICE = Config.service
+    local isValid = JunkieKeySystem.verifyKey(API_KEY, userKey, SERVICE)
+    if isValid then
+        ShowStatusMessage("Key valid! Loading Script...", Config.colors.success)
+        PlaySound(SoundAssets.Success)
+        if writefile then pcall(function() writefile(KeySystemData.FileName, userKey) end) end
+        SmoothTween(MainFrame, 0.5, {Position = UDim2.new(0.5, 0, -0.5, 0), BackgroundTransparency = 1}, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        task.wait(0.5)
+        ScreenGui:Destroy()
+        main()
+    else
+        ShowStatusMessage("Invalid key. Try again!", Config.colors.error)
+        PlaySound(SoundAssets.AccessDenied)
+    end
+end
+
+SubmitButton.MouseButton1Click:Connect(function()
+    PlaySound(SoundAssets.ButtonClick)
+    validateKey()
+end)
+
+GetKeyButton.MouseButton1Click:Connect(function()
+    PlaySound(SoundAssets.ButtonClick)
+    openGetKey()
+end)
+
+local dragging, dragInput, dragStart, startPos
+local function onInputChanged(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        CreateTrail(MainFrame)
+    end
+end
+
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+    end
+end)
+
+TitleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end
+end)
+
+UserInputService.InputChanged:Connect(onInputChanged)
+
+DiscordButton.MouseButton1Click:Connect(function()
+    PlaySound(SoundAssets.ButtonClick)
+    local discordUrl = "https://discord.gg/" .. KeySystemData.DiscordInvite
+    if setclipboard then
+        setclipboard(discordUrl)
+        ShowStatusMessage("Copied Discord invite!", Config.colors.discord)
+        PlaySound(SoundAssets.SuccessDiscord)
+    else
+        ShowStatusMessage("Join: " .. discordUrl, Config.colors.discord)
+        PlaySound(SoundAssets.SuccessDiscord)
+    end
+end)
+
+KeyInput.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        PlaySound(SoundAssets.ButtonClick)
+        validateKey()
+    end
+end)
+
+if isfile and readfile then
+    local success, savedKey = pcall(function()
+        if isfile(KeySystemData.FileName) then return readfile(KeySystemData.FileName) end
+        return nil
+    end)
+    if success and savedKey and savedKey ~= "" then
+        KeyInput.Text = savedKey
+        task.spawn(validateKey)
+    end
+end
+
+MainFrame.Position = UDim2.new(0.5, 0, 0.5, 100)
+MainFrame.Size = UDim2.new(0, 0, 0, 0)
+MainFrame.BackgroundTransparency = 1
+CreateTrail(MainFrame)
+SmoothTween(MainFrame, 0.7, {Size = UDim2.new(0, 350, 0, 250), Position = UDim2.new(0.5, 0, 0.5, 0), BackgroundTransparency = 0}, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+SmoothTween(mainStroke, 0.7, {Transparency = 0.2}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+PlaySound(SoundAssets.UIOpen)Size = button.Size - UDim2.new(0, 5, 0, 2)}) end)
     button.MouseButton1Up:Connect(function() SmoothTween(button, 0.1, {Size = button.Size + UDim2.new(0, 5, 0, 2)}) end)
 end
 
