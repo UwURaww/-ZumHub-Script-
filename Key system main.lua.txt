@@ -1,18 +1,12 @@
--- RedExecutor Key System
--- A clean and modular implementation of a key authentication UI for Roblox
-
--- Prevent multiple instances
 if getgenv().RedExecutorKeySys then return end
 getgenv().RedExecutorKeySys = true
 
--- Services
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
 
--- Configuration Data
 local KeySystemData = {
     Name = Config.title,
     Colors = Config.colors,
@@ -23,7 +17,6 @@ local KeySystemData = {
     FileName = Config.keyFileName
 }
 
--- Sound Assets
 local SoundAssets = {
     UIOpen = { Id = Config.sounds.uiOpen },
     ButtonClick = { Id = Config.sounds.buttonClick },
@@ -33,7 +26,6 @@ local SoundAssets = {
     AccessDenied = { Id = Config.sounds.accessDenied }
 }
 
--- Utility Functions
 local function PlaySound(soundData)
     local success, err = pcall(function()
         local sound = Instance.new("Sound")
@@ -103,7 +95,6 @@ local function CreateTrail(frame)
     end
 end
 
--- UI Creation
 local function CreateUI()
     local ScreenGui = CreateObject("ScreenGui", {
         Name = Config.title,
@@ -278,7 +269,6 @@ local function CreateUI()
     return ScreenGui, MainFrame, mainStroke, KeyInput, inputStroke, SubmitButton, submitStroke, GetKeyButton, getKeyStroke, DiscordButton, discordStroke, StatusLabel, TitleBar
 end
 
--- Animation Functions
 local function AddGlow(stroke)
     SmoothTween(stroke, 0.2, { Transparency = 0.3, Thickness = 2 })
 end
@@ -323,7 +313,6 @@ local function ShowStatusMessage(StatusLabel, text, color)
     end)
 end
 
--- Key System Logic
 local function openGetKey(StatusLabel)
     local success, JunkieKeySystem = pcall(function()
         return loadstring(game:HttpGet("https://junkie-development.de/sdk/JunkieKeySystem.lua"))()
@@ -388,7 +377,6 @@ local function validateKey(KeyInput, StatusLabel, ScreenGui, MainFrame)
     end
 end
 
--- Drag Functionality
 local function SetupDragging(TitleBar, MainFrame)
     local dragging, dragInput, dragStart, startPos
     local function onInputChanged(input)
@@ -426,21 +414,17 @@ local function SetupDragging(TitleBar, MainFrame)
     UserInputService.InputChanged:Connect(onInputChanged)
 end
 
--- Initialize UI and Connect Events
 local function Initialize()
     local ScreenGui, MainFrame, mainStroke, KeyInput, inputStroke, SubmitButton, submitStroke, GetKeyButton, getKeyStroke, DiscordButton, discordStroke, StatusLabel, TitleBar = CreateUI()
     if not ScreenGui then return end
 
-    -- Setup button animations
     AddButtonAnimations(SubmitButton, submitStroke)
     AddButtonAnimations(GetKeyButton, getKeyStroke)
     AddButtonAnimations(DiscordButton, discordStroke)
 
-    -- Setup input field glow
     KeyInput.Focused:Connect(function() AddGlow(inputStroke) end)
     KeyInput.FocusLost:Connect(function() RemoveGlow(inputStroke) end)
 
-    -- Setup button click events
     SubmitButton.MouseButton1Click:Connect(function()
         PlaySound(SoundAssets.ButtonClick)
         validateKey(KeyInput, StatusLabel, ScreenGui, MainFrame)
@@ -471,10 +455,8 @@ local function Initialize()
         end
     end)
 
-    -- Setup dragging
     SetupDragging(TitleBar, MainFrame)
 
-    -- Check for saved key
     if isfile and readfile then
         local success, savedKey = pcall(function()
             if isfile(KeySystemData.FileName) then
@@ -488,7 +470,6 @@ local function Initialize()
         end
     end
 
-    -- Animate UI entrance
     MainFrame.Position = UDim2.new(0.5, 0, 0.5, 100)
     MainFrame.Size = UDim2.new(0, 0, 0, 0)
     MainFrame.BackgroundTransparency = 1
@@ -502,5 +483,4 @@ local function Initialize()
     PlaySound(SoundAssets.UIOpen)
 end
 
--- Start the system
 Initialize()
