@@ -1,0 +1,1 @@
+print((function() local _0x82f4e8="" for _,v in ipairs({72,101,108,108,111,44,32,82,111,98,108,111,120,33}) do _0x82f4e8=_0x82f4e8..string.char(v) end return _0x82f4e8 end)())
