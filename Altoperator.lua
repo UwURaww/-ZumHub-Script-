@@ -13,7 +13,6 @@ local loopCmd = nil
 
 local lastSent = 0
 local COOLDOWN = 0.8
-
 local guiWidth = 280
 local guiHeight = 420
 
@@ -102,8 +101,8 @@ local COMMANDS = {
 	{label = ".fling", cmd = ".fling"},
 	{label = ".gravityoff", cmd = ".gravityoff"},
 	{label = ".gravityreset", cmd = ".gravityreset"},
-	{label = ".status", cmd = ".status"},
 	{label = ".loopstop", cmd = ".loopstop"},
+	{label = ".status", cmd = ".status"},
 	{label = ".e wave", cmd = ".e wave"},
 	{label = ".e dance", cmd = ".e dance"},
 	{label = ".e dance2", cmd = ".e dance2"},
@@ -119,6 +118,8 @@ local COMMANDS = {
 	{label = "bighead", toggle = true, on = ".bighead on", off = ".bighead off"},
 	{label = "freeze", toggle = true, on = ".freeze", off = ".unfreeze"},
 	{label = "crouch", toggle = true, on = ".crouch on", off = ".crouch off"},
+	{label = "lockcontrol", toggle = true, on = ".lockcontrol on", off = ".lockcontrol off"},
+	{label = "mirror", toggle = true, on = ".mirror on", off = ".mirror off"},
 	{label = ".fw [n]", cmd = nil, input = true, base = ".fw"},
 	{label = ".bw [n]", cmd = nil, input = true, base = ".bw"},
 	{label = ".l [n]", cmd = nil, input = true, base = ".l"},
@@ -222,12 +223,14 @@ local function createQuickTab()
 		robotName = robotInput.Text
 	end)
 
-	local function makeToggleBtn(text, xOff, yOff, w, activeColor, inactiveColor, onToggle)
+	local halfW = math.floor((guiWidth - 20) / 2)
+
+	local function makeTopToggle(text, xOff, yOff, w, activeColor, inactiveColor, initState, onToggle)
 		local btn = Instance.new("TextButton")
 		btn.Size = UDim2.new(0, w, 0, 20)
 		btn.Position = UDim2.new(0, xOff, 0, yOff)
-		btn.BackgroundColor3 = inactiveColor
-		btn.Text = text
+		btn.BackgroundColor3 = initState and activeColor or inactiveColor
+		btn.Text = text .. (initState and ": ON" or ": OFF")
 		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 		btn.TextScaled = true
 		btn.Font = Enum.Font.GothamBold
@@ -236,23 +239,22 @@ local function createQuickTab()
 		local bc = Instance.new("UICorner")
 		bc.CornerRadius = UDim.new(0, 4)
 		bc.Parent = btn
-		local state = false
+		local state = initState
 		btn.MouseButton1Click:Connect(function()
 			state = not state
 			btn.BackgroundColor3 = state and activeColor or inactiveColor
+			btn.Text = text .. (state and ": ON" or ": OFF")
 			onToggle(state)
 		end)
 		return btn
 	end
 
-	local halfW = math.floor((guiWidth - 20) / 2)
-
-	makeToggleBtn("Whisper: ON", 8, 56, halfW, Color3.fromRGB(30, 120, 60), Color3.fromRGB(120, 40, 40), function(state)
+	makeTopToggle("Whisper", 8, 56, halfW, Color3.fromRGB(30, 120, 60), Color3.fromRGB(100, 40, 40), useWhisper, function(state)
 		useWhisper = state
 		sendWhisper("Whisper: " .. (state and "ON" or "OFF"))
 	end)
 
-	local viewBtn = makeToggleBtn("View Robot", 8 + halfW + 4, 56, halfW, Color3.fromRGB(40, 80, 160), Color3.fromRGB(40, 50, 80), function(state)
+	makeTopToggle("View", 8 + halfW + 4, 56, halfW, Color3.fromRGB(40, 80, 160), Color3.fromRGB(40, 50, 80), false, function(state)
 		if state then startView() else stopView() end
 	end)
 
@@ -274,7 +276,7 @@ local function createQuickTab()
 	ac.Parent = argInput
 
 	local loopLabel = Instance.new("TextLabel")
-	loopLabel.Size = UDim2.new(1, -16, 0, 18)
+	loopLabel.Size = UDim2.new(1, -76, 0, 18)
 	loopLabel.Position = UDim2.new(0, 8, 0, 106)
 	loopLabel.BackgroundTransparency = 1
 	loopLabel.Text = loopCmd and ("Loop: " .. loopCmd) or "Loop: OFF"
@@ -285,9 +287,9 @@ local function createQuickTab()
 	loopLabel.Parent = frame
 
 	local stopLoopBtn = Instance.new("TextButton")
-	stopLoopBtn.Size = UDim2.new(0, 60, 0, 18)
-	stopLoopBtn.Position = UDim2.new(1, -68, 0, 106)
-	stopLoopBtn.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
+	stopLoopBtn.Size = UDim2.new(0, 62, 0, 18)
+	stopLoopBtn.Position = UDim2.new(1, -70, 0, 106)
+	stopLoopBtn.BackgroundColor3 = Color3.fromRGB(140, 40, 40)
 	stopLoopBtn.Text = "Stop Loop"
 	stopLoopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	stopLoopBtn.TextScaled = true
@@ -353,53 +355,27 @@ local function createQuickTab()
 	sizeLabel.TextXAlignment = Enum.TextXAlignment.Left
 	sizeLabel.Parent = frame
 
-	local sizeSmall = Instance.new("TextButton")
-	sizeSmall.Size = UDim2.new(0, 50, 0, 16)
-	sizeSmall.Position = UDim2.new(0, 52, 0, 188)
-	sizeSmall.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-	sizeSmall.TextColor3 = Color3.fromRGB(220, 220, 255)
-	sizeSmall.Text = "Small"
-	sizeSmall.TextScaled = true
-	sizeSmall.Font = Enum.Font.Gotham
-	sizeSmall.BorderSizePixel = 0
-	sizeSmall.Parent = frame
-	local ssc = Instance.new("UICorner") ssc.CornerRadius = UDim.new(0, 3) ssc.Parent = sizeSmall
-	sizeSmall.MouseButton1Click:Connect(function()
-		guiWidth = 220 guiHeight = 360
-		createQuickTab()
-	end)
-
-	local sizeMed = Instance.new("TextButton")
-	sizeMed.Size = UDim2.new(0, 50, 0, 16)
-	sizeMed.Position = UDim2.new(0, 106, 0, 188)
-	sizeMed.BackgroundColor3 = Color3.fromRGB(60, 60, 40)
-	sizeMed.TextColor3 = Color3.fromRGB(220, 220, 255)
-	sizeMed.Text = "Med"
-	sizeMed.TextScaled = true
-	sizeMed.Font = Enum.Font.Gotham
-	sizeMed.BorderSizePixel = 0
-	sizeMed.Parent = frame
-	local smc = Instance.new("UICorner") smc.CornerRadius = UDim.new(0, 3) smc.Parent = sizeMed
-	sizeMed.MouseButton1Click:Connect(function()
-		guiWidth = 280 guiHeight = 420
-		createQuickTab()
-	end)
-
-	local sizeLarge = Instance.new("TextButton")
-	sizeLarge.Size = UDim2.new(0, 50, 0, 16)
-	sizeLarge.Position = UDim2.new(0, 160, 0, 188)
-	sizeLarge.BackgroundColor3 = Color3.fromRGB(40, 60, 40)
-	sizeLarge.TextColor3 = Color3.fromRGB(220, 220, 255)
-	sizeLarge.Text = "Large"
-	sizeLarge.TextScaled = true
-	sizeLarge.Font = Enum.Font.Gotham
-	sizeLarge.BorderSizePixel = 0
-	sizeLarge.Parent = frame
-	local slzc = Instance.new("UICorner") slzc.CornerRadius = UDim.new(0, 3) slzc.Parent = sizeLarge
-	sizeLarge.MouseButton1Click:Connect(function()
-		guiWidth = 360 guiHeight = 520
-		createQuickTab()
-	end)
+	local sizes = {{"S", 220, 360}, {"M", 280, 420}, {"L", 360, 520}}
+	for i, s in ipairs(sizes) do
+		local sb = Instance.new("TextButton")
+		sb.Size = UDim2.new(0, 36, 0, 16)
+		sb.Position = UDim2.new(0, 50 + (i - 1) * 40, 0, 188)
+		sb.BackgroundColor3 = (guiWidth == s[2]) and Color3.fromRGB(80, 80, 40) or Color3.fromRGB(40, 40, 60)
+		sb.TextColor3 = Color3.fromRGB(220, 220, 255)
+		sb.Text = s[1]
+		sb.TextScaled = true
+		sb.Font = Enum.Font.GothamBold
+		sb.BorderSizePixel = 0
+		sb.Parent = frame
+		local sc = Instance.new("UICorner")
+		sc.CornerRadius = UDim.new(0, 3)
+		sc.Parent = sb
+		sb.MouseButton1Click:Connect(function()
+			guiWidth = s[2]
+			guiHeight = s[3]
+			createQuickTab()
+		end)
+	end
 
 	local divider = Instance.new("Frame")
 	divider.Size = UDim2.new(1, -16, 0, 1)
