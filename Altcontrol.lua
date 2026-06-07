@@ -1,5 +1,3 @@
-print("ready") 
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local PathfindingService = game:GetService("PathfindingService")
@@ -472,4 +470,4 @@ for _, player in ipairs(Players:GetPlayers()) do
 	end)
 end
 
-sendWhisper("Robot ready. Listening to " .. OPERATOR)
+print("Robot ready. Listening to " .. OPERATOR)
