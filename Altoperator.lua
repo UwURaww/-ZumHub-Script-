@@ -1,7 +1,7 @@
 local Players = game:GetService("Players")
 local localPlayer = Players.LocalPlayer
 
-local ROBOT_NAME = "YourRobotNameHere"
+local ROBOT_NAME = "botaktak_ireng"
 
 local quickTabGui = nil
 local quickTabVisible = false
