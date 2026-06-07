@@ -1,6 +1,5 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local PathfindingService = game:GetService("PathfindingService")
 local localPlayer = Players.LocalPlayer
 
 local OPERATOR = "zumartengge6no10"
@@ -11,7 +10,7 @@ local followConnection = nil
 local speedValue = 16
 local jumpValue = 50
 local noclipConnection = nil
-local currentPath = nil
+local godModeConnection = nil
 
 local function isOperator(name)
 	return name == OPERATOR or name == OPERATOR_DISPLAY
@@ -46,138 +45,117 @@ local function sendChat(message)
 end
 
 local function stopFollowing()
+	following = nil
 	if followConnection then
-		if type(followConnection) == "userdata" then
-			followConnection:Disconnect()
-		end
+		followConnection:Disconnect()
 		followConnection = nil
 	end
-	following = nil
-	currentPath = nil
 end
 
-local function pathfindTo(targetPosition)
-	local char = localPlayer.Character
-	if not char then return end
-	local root = char:FindFirstChild("HumanoidRootPart")
-	local hum = char:FindFirstChildOfClass("Humanoid")
-	if not root or not hum then return end
-
-	local path = PathfindingService:CreatePath({
-		AgentHeight = 5,
-		AgentRadius = 2,
-		AgentCanJump = true,
-		AgentCanClimb = true,
-		WaypointSpacing = 4,
-	})
-
-	local success = pcall(function()
-		path:ComputeAsync(root.Position, targetPosition)
-	end)
-
-	if not success or path.Status ~= Enum.PathStatus.Success then
-		hum:MoveTo(targetPosition)
-		return
-	end
-
-	currentPath = path
-	local waypoints = path:GetWaypoints()
-
-	for _, waypoint in ipairs(waypoints) do
-		if currentPath ~= path then break end
-		if waypoint.Action == Enum.PathWaypointAction.Jump then
-			hum.Jump = true
+local function findPlayer(name)
+	if name == "me" then
+		local t = Players:FindFirstChild(OPERATOR)
+		if not t then
+			for _, p in ipairs(Players:GetPlayers()) do
+				if p.DisplayName:lower() == OPERATOR_DISPLAY:lower() then return p end
+			end
 		end
-		hum:MoveTo(waypoint.Position)
-		hum.MoveToFinished:Wait(3)
+		return t
 	end
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p.Name:lower():find(name:lower()) or p.DisplayName:lower():find(name:lower()) then
+			return p
+		end
+	end
+	return nil
 end
 
 local function followPlayer(targetName)
 	stopFollowing()
-	local target = nil
-	if targetName == "me" then
-		target = Players:FindFirstChild(OPERATOR)
-		if not target then
-			for _, p in ipairs(Players:GetPlayers()) do
-				if p.DisplayName:lower() == OPERATOR_DISPLAY:lower() then
-					target = p
-					break
-				end
-			end
-		end
-	else
-		for _, p in ipairs(Players:GetPlayers()) do
-			if p.Name:lower():find(targetName:lower()) or p.DisplayName:lower():find(targetName:lower()) then
-				target = p
-				break
-			end
-		end
-	end
-	if not target or not target.Character then return end
+	local target = findPlayer(targetName)
+	if not target then sendWhisper("Player not found.") return end
 	following = target
-	followConnection = task.spawn(function()
-		while following do
-			if not following.Character then task.wait(0.5) continue end
-			local myChar = localPlayer.Character
-			local targetChar = following.Character
-			if not myChar or not targetChar then task.wait(0.5) continue end
-			local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-			local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-			if not myRoot or not targetRoot then task.wait(0.5) continue end
-			local distance = (myRoot.Position - targetRoot.Position).Magnitude
-			if distance > 6 then
-				pathfindTo(targetRoot.Position)
-			end
-			task.wait(0.3)
+
+	followConnection = RunService.Heartbeat:Connect(function()
+		if not following then return end
+		local targetChar = following.Character
+		local myChar = localPlayer.Character
+		if not myChar or not targetChar then return end
+		local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+		local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+		local myHum = myChar:FindFirstChildOfClass("Humanoid")
+		if not myRoot or not targetRoot or not myHum then return end
+		local myPos = myRoot.Position
+		local targetPos = targetRoot.Position
+		local dist = (myPos - targetPos).Magnitude
+		if dist > 5 then
+			local direction = (targetPos - myPos).Unit
+			local desiredPos = targetPos - direction * 4
+			myHum:MoveTo(desiredPos)
+		else
+			myHum:MoveTo(myPos)
 		end
 	end)
 end
 
 local function goToPosition(targetName)
-	local target = nil
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p.Name:lower():find(targetName:lower()) or p.DisplayName:lower():find(targetName:lower()) then
-			target = p
-			break
-		end
-	end
+	local target = findPlayer(targetName)
 	if not target or not target.Character then return end
 	local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
-	if targetRoot then pathfindTo(targetRoot.Position) end
+	if not targetRoot then return end
+	local myChar = localPlayer.Character
+	if not myChar then return end
+	local myHum = myChar:FindFirstChildOfClass("Humanoid")
+	if myHum then myHum:MoveTo(targetRoot.Position) end
 end
 
 local function patrol(names)
 	stopFollowing()
 	local targets = {}
 	for _, name in ipairs(names) do
-		for _, p in ipairs(Players:GetPlayers()) do
-			if p.Name:lower():find(name:lower()) or p.DisplayName:lower():find(name:lower()) then
-				table.insert(targets, p)
-				break
-			end
-		end
+		local p = findPlayer(name)
+		if p then table.insert(targets, p) end
 	end
 	if #targets == 0 then return end
 	following = targets[1]
 	local index = 1
-	followConnection = task.spawn(function()
-		while following do
-			local target = targets[index]
-			if not target or not target.Character then task.wait(0.5) continue end
-			local myChar = localPlayer.Character
-			if not myChar then task.wait(0.5) continue end
-			local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-			local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
-			if not myRoot or not targetRoot then task.wait(0.5) continue end
-			local distance = (myRoot.Position - targetRoot.Position).Magnitude
-			if distance <= 5 then
-				index = (index % #targets) + 1
-				task.wait(1)
-			else
-				pathfindTo(targetRoot.Position)
-			end
-			task.wait(0.3)
+	local cooldown = false
+	followConnection = RunService.Heartbeat:Connect(function()
+		if not following or cooldown then return end
+		local target = targets[index]
+		if not target or not target.Character then return end
+		local myChar = localPlayer.Character
+		if not myChar then return end
+		local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+		local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+		local myHum = myChar:FindFirstChildOfClass("Humanoid")
+		if not myRoot or not targetRoot or not myHum then return end
+		local dist = (myRoot.Position - targetRoot.Position).Magnitude
+		if dist <= 5 then
+			cooldown = true
+			index = (index % #targets) + 1
+			task.delay(1, function() cooldown = false end)
+		else
+			local direction = (targetRoot.Position - myRoot.Position).Unit
+			myHum:MoveTo(targetRoot.Position - direction * 4)
+		end
+	end)
+end
+
+local function loopTp(targetName)
+	stopFollowing()
+	local target = findPlayer(targetName)
+	if not target then return end
+	following = target
+	followConnection = RunService.Heartbeat:Connect(function()
+		if not following or not following.Character then stopFollowing() return end
+		local myChar = localPlayer.Character
+		local targetChar = following.Character
+		if not myChar or not targetChar then return end
+		local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+		local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+		if myRoot and targetRoot then
+			myRoot.CFrame = targetRoot.CFrame + Vector3.new(3, 0, 0)
 		end
 	end)
 end
@@ -234,13 +212,7 @@ local function freezePlayer(enabled)
 end
 
 local function tpToPlayer(targetName)
-	local target = nil
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p.Name:lower():find(targetName:lower()) or p.DisplayName:lower():find(targetName:lower()) then
-			target = p
-			break
-		end
-	end
+	local target = findPlayer(targetName)
 	if not target or not target.Character then return end
 	local myChar = localPlayer.Character
 	if not myChar then return end
@@ -258,38 +230,37 @@ local function tpToCoords(x, y, z)
 	if myRoot then myRoot.CFrame = CFrame.new(x, y, z) end
 end
 
-local function setInvisible(enabled)
-	local char = localPlayer.Character
-	if not char then return end
-	for _, part in ipairs(char:GetDescendants()) do
-		if part:IsA("BasePart") or part:IsA("Decal") then
-			part.Transparency = enabled and 1 or 0
+local function setInvisibleFE(enabled)
+	if enabled then
+		loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-fe-invisible-OPEN-SOURCE-53560"))()
+	else
+		local char = localPlayer.Character
+		if not char then return end
+		for _, part in ipairs(char:GetDescendants()) do
+			if part:IsA("BasePart") or part:IsA("Decal") then
+				part.Transparency = 0
+			end
 		end
 	end
 end
 
-local function loopTp(targetName)
-	stopFollowing()
-	local target = nil
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p.Name:lower():find(targetName:lower()) or p.DisplayName:lower():find(targetName:lower()) then
-			target = p
-			break
-		end
+local function setGodMode(enabled)
+	if godModeConnection then
+		godModeConnection:Disconnect()
+		godModeConnection = nil
 	end
-	if not target then return end
-	following = target
-	followConnection = RunService.Heartbeat:Connect(function()
-		if not following or not following.Character then stopFollowing() return end
-		local myChar = localPlayer.Character
-		local targetChar = following.Character
-		if not myChar or not targetChar then return end
-		local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-		local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-		if myRoot and targetRoot then
-			myRoot.CFrame = targetRoot.CFrame + Vector3.new(3, 0, 0)
-		end
-	end)
+	if enabled then
+		godModeConnection = RunService.Heartbeat:Connect(function()
+			local char = localPlayer.Character
+			if not char then return end
+			local root = char:FindFirstChild("HumanoidRootPart")
+			if not root then return end
+			local parts = game:GetService("Workspace"):GetPartBoundsInRadius(root.Position, 10)
+			for _, part in ipairs(parts) do
+				if part.CanTouch then part.CanTouch = false end
+			end
+		end)
+	end
 end
 
 local function moveDirection(dir, studs)
@@ -305,7 +276,7 @@ local function moveDirection(dir, studs)
 	elseif dir == "left" then target = cf * CFrame.new(-(studs or 10), 0, 0)
 	elseif dir == "right" then target = cf * CFrame.new((studs or 10), 0, 0)
 	end
-	if target then pathfindTo(target.Position) end
+	if target then hum:MoveTo(target.Position) end
 end
 
 local function doJump()
@@ -326,13 +297,7 @@ local function turnDirection(dir, amount)
 end
 
 local function lookAt(targetName)
-	local target = nil
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p.Name:lower():find(targetName:lower()) or p.DisplayName:lower():find(targetName:lower()) then
-			target = p
-			break
-		end
-	end
+	local target = findPlayer(targetName)
 	if not target or not target.Character then return end
 	local myChar = localPlayer.Character
 	if not myChar then return end
@@ -346,6 +311,7 @@ end
 local function spinLoop(enabled)
 	stopFollowing()
 	if enabled then
+		following = true
 		followConnection = RunService.Heartbeat:Connect(function()
 			local char = localPlayer.Character
 			if not char then return end
@@ -355,12 +321,48 @@ local function spinLoop(enabled)
 	end
 end
 
+local function fling()
+	local char = localPlayer.Character
+	if not char then return end
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if root then
+		root.Velocity = Vector3.new(math.random(-100, 100), 200, math.random(-100, 100))
+	end
+end
+
+local function setGravity(amount)
+	game:GetService("Workspace").Gravity = amount
+end
+
+local function floatMode(enabled)
+	if enabled then game:GetService("Workspace").Gravity = 5
+	else game:GetService("Workspace").Gravity = 196.2 end
+end
+
+local function bigHead(enabled)
+	local char = localPlayer.Character
+	if not char then return end
+	local head = char:FindFirstChild("Head")
+	if head then
+		head.Size = enabled and Vector3.new(4, 4, 4) or Vector3.new(2, 1, 1)
+	end
+end
+
 local function processCommand(message, speaker)
 	if not isOperator(speaker) then return end
-	if message:sub(1, 1) ~= "." then return end
+
+	local cleaned = message
+	if cleaned:lower():sub(1, 3) == "/w " then
+		local spaceAfterName = cleaned:find(" ", 4)
+		if spaceAfterName then
+			cleaned = cleaned:sub(spaceAfterName + 1)
+		end
+	end
+
+	if cleaned:sub(1, 1) ~= "." then return end
 
 	local args = {}
-	for word in message:sub(2):gmatch("%S+") do
+	for word in cleaned:sub(2):gmatch("%S+") do
 		table.insert(args, word)
 	end
 
@@ -422,8 +424,11 @@ local function processCommand(message, speaker)
 			if x and y and z then tpToCoords(x, y, z) end
 		end
 	elseif cmd == "invisible" then
-		if rest == "on" then setInvisible(true)
-		elseif rest == "off" then setInvisible(false) end
+		if rest == "on" then setInvisibleFE(true)
+		elseif rest == "off" then setInvisibleFE(false) end
+	elseif cmd == "godmode" then
+		if rest == "on" then setGodMode(true)
+		elseif rest == "off" then setGodMode(false) end
 	elseif cmd == "reset" then
 		local char = localPlayer.Character
 		if char then
@@ -447,14 +452,26 @@ local function processCommand(message, speaker)
 	elseif cmd == "spin" then
 		if rest == "on" then spinLoop(true)
 		elseif rest == "off" then spinLoop(false) end
+	elseif cmd == "fling" then
+		fling()
+	elseif cmd == "gravity" then
+		local num = tonumber(args[1])
+		if num then setGravity(num) end
+	elseif cmd == "gravityoff" then
+		setGravity(0)
+	elseif cmd == "gravityreset" then
+		setGravity(196.2)
+	elseif cmd == "float" then
+		if rest == "on" then floatMode(true)
+		elseif rest == "off" then floatMode(false) end
+	elseif cmd == "bighead" then
+		if rest == "on" then bigHead(true)
+		elseif rest == "off" then bigHead(false) end
 	elseif cmd == "status" then
-		if following then
-			sendWhisper("Tracking: " .. tostring(following))
-		else
-			sendWhisper("Idle.")
-		end
+		if following then sendWhisper("Active.")
+		else sendWhisper("Idle.") end
 	elseif cmd == "commands" then
-		sendWhisper(".follow .goto .patrol .looptp .stop .say .sit .stand .e .emotes .speed .jump .jumppower .noclip .freeze .unfreeze .tp .invisible .reset .fw .bw .l .r .tl .tr .lookat .spin .status")
+		sendWhisper(".follow .goto .patrol .looptp .stop .say .sit .stand .e .emotes .speed .jump .jumppower .noclip .freeze .unfreeze .tp .invisible .godmode .reset .fw .bw .l .r .tl .tr .lookat .spin .fling .gravity .gravityoff .gravityreset .float .bighead .status")
 	end
 end
 
@@ -470,4 +487,4 @@ for _, player in ipairs(Players:GetPlayers()) do
 	end)
 end
 
-print("Robot ready. Listening to " .. OPERATOR)
+sendWhisper("Robot ready. Listening to " .. OPERATOR)
