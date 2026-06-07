@@ -14,6 +14,9 @@ local godModeConnection = nil
 local loopConnection = nil
 local loopCmd = nil
 local lastLoopSent = 0
+local controlLocked = false
+local mirrorConnection = nil
+local mirrorEnabled = false
 
 local function isOperator(name)
 	return name == OPERATOR or name == OPERATOR_DISPLAY
@@ -45,6 +48,78 @@ local function sendChat(message)
 	task.wait(math.random(4, 12) / 10)
 	local general = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
 	if general then general:SendAsync(message) end
+end
+
+local function lockControl(enabled)
+	controlLocked = enabled
+	local char = localPlayer.Character
+	if not char then return end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not hum or not root then return end
+	if enabled then
+		hum.WalkSpeed = 0
+		hum.JumpPower = 0
+		root.Anchored = true
+		sendWhisper("Control locked.")
+	else
+		hum.WalkSpeed = speedValue
+		hum.JumpPower = jumpValue
+		root.Anchored = false
+		sendWhisper("Control unlocked.")
+	end
+end
+
+local function startMirror()
+	if mirrorConnection then mirrorConnection:Disconnect() mirrorConnection = nil end
+	local operator = findPlayer and findPlayer(OPERATOR) or Players:FindFirstChild(OPERATOR)
+	if not operator then
+		sendWhisper("Operator not found for mirror.")
+		return
+	end
+	mirrorEnabled = true
+	sendWhisper("Mirror enabled.")
+
+	mirrorConnection = RunService.Heartbeat:Connect(function()
+		if not mirrorEnabled then return end
+		local opChar = operator.Character
+		local myChar = localPlayer.Character
+		if not opChar or not myChar then return end
+
+		local opRoot = opChar:FindFirstChild("HumanoidRootPart")
+		local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+		local opHum = opChar:FindFirstChildOfClass("Humanoid")
+		local myHum = myChar:FindFirstChildOfClass("Humanoid")
+		if not opRoot or not myRoot or not opHum or not myHum then return end
+
+		myHum.WalkSpeed = opHum.WalkSpeed
+		myHum.JumpPower = opHum.JumpPower
+		myHum.Jump = opHum.Jump
+
+		local opVelocity = opRoot.Velocity
+		local myPos = myRoot.Position
+
+		if opVelocity.Magnitude > 0.5 then
+			local moveTarget = myPos + Vector3.new(opVelocity.X, 0, opVelocity.Z).Unit * 2
+			myHum:MoveTo(moveTarget)
+		end
+
+		myRoot.CFrame = CFrame.new(myRoot.Position) * CFrame.Angles(0, math.atan2(-opRoot.CFrame.LookVector.X, -opRoot.CFrame.LookVector.Z), 0)
+	end)
+end
+
+local function stopMirror()
+	mirrorEnabled = false
+	if mirrorConnection then mirrorConnection:Disconnect() mirrorConnection = nil end
+	local char = localPlayer.Character
+	if char then
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if hum then
+			hum.WalkSpeed = speedValue
+			hum.JumpPower = jumpValue
+		end
+	end
+	sendWhisper("Mirror disabled.")
 end
 
 local function stopFollowing()
@@ -346,35 +421,12 @@ local function bigHead(enabled)
 	end
 end
 
-local function setWalkAnim(enabled)
-	local char = localPlayer.Character
-	if not char then return end
-	local hum = char:FindFirstChildOfClass("Humanoid")
-	if not hum then return end
-	hum.WalkSpeed = enabled and speedValue or 0
-end
-
 local function crouchMode(enabled)
 	local char = localPlayer.Character
 	if not char then return end
 	local hum = char:FindFirstChildOfClass("Humanoid")
-	local root = char:FindFirstChild("HumanoidRootPart")
-	if not hum or not root then return end
-	if enabled then
-		hum.HipHeight = 0.5
-	else
-		hum.HipHeight = 2
-	end
-end
-
-local function zoomCamera(dist)
-	local char = localPlayer.Character
-	if not char then return end
-	local cam = game:GetService("Workspace").CurrentCamera
-	cam.CameraType = Enum.CameraType.Attach
-	task.delay(0.1, function()
-		cam.CameraType = Enum.CameraType.Custom
-	end)
+	if not hum then return end
+	hum.HipHeight = enabled and 0.5 or 2
 end
 
 local function stopLoop()
@@ -401,6 +453,18 @@ end
 
 processCommand = function(message, speaker)
 	if not isOperator(speaker) then return end
+
+	if controlLocked then
+		local cleaned2 = message
+		if cleaned2:lower():sub(1, 3) == "/w " then
+			local s = cleaned2:find(" ", 4)
+			if s then cleaned2 = cleaned2:sub(s + 1) end
+		end
+		local firstWord = cleaned2:match("%.(%S+)")
+		if firstWord and firstWord:lower() ~= "lockcontrol" then
+			return
+		end
+	end
 
 	local cleaned = message
 	if cleaned:lower():sub(1, 3) == "/w " then
@@ -521,6 +585,12 @@ processCommand = function(message, speaker)
 	elseif cmd == "crouch" then
 		if rest == "on" then crouchMode(true)
 		elseif rest == "off" then crouchMode(false) end
+	elseif cmd == "lockcontrol" then
+		if rest == "on" then lockControl(true)
+		elseif rest == "off" then lockControl(false) end
+	elseif cmd == "mirror" then
+		if rest == "on" then startMirror()
+		elseif rest == "off" then stopMirror() end
 	elseif cmd == "loop" then
 		if rest ~= "" then
 			local parts = {}
@@ -541,9 +611,11 @@ processCommand = function(message, speaker)
 	elseif cmd == "status" then
 		local loopStatus = loopCmd and ("Looping: " .. loopCmd) or "No loop."
 		local followStatus = following and "Following." or "Idle."
-		sendWhisper(followStatus .. " " .. loopStatus)
+		local lockStatus = controlLocked and "LOCKED." or "Unlocked."
+		local mirrorStatus = mirrorEnabled and "Mirroring." or "No mirror."
+		sendWhisper(followStatus .. " " .. loopStatus .. " " .. lockStatus .. " " .. mirrorStatus)
 	elseif cmd == "commands" then
-		sendWhisper(".follow .goto .patrol .looptp .stop .say .sit .stand .e .emotes .speed .jump .jumppower .noclip .freeze .unfreeze .tp .invisible .godmode .reset .fw .bw .l .r .tl .tr .lookat .spin .fling .gravity .gravityoff .gravityreset .float .bighead .crouch .loop .loopstop .status")
+		sendWhisper(".follow .goto .patrol .looptp .stop .say .sit .stand .e .emotes .speed .jump .jumppower .noclip .freeze .unfreeze .tp .invisible .godmode .reset .fw .bw .l .r .tl .tr .lookat .spin .fling .gravity .gravityoff .gravityreset .float .bighead .crouch .lockcontrol .mirror .loop .loopstop .status")
 	end
 end
 
