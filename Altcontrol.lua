@@ -11,6 +11,9 @@ local speedValue = 16
 local jumpValue = 50
 local noclipConnection = nil
 local godModeConnection = nil
+local loopConnection = nil
+local loopCmd = nil
+local lastLoopSent = 0
 
 local function isOperator(name)
 	return name == OPERATOR or name == OPERATOR_DISPLAY
@@ -75,7 +78,6 @@ local function followPlayer(targetName)
 	local target = findPlayer(targetName)
 	if not target then sendWhisper("Player not found.") return end
 	following = target
-
 	followConnection = RunService.Heartbeat:Connect(function()
 		if not following then return end
 		local targetChar = following.Character
@@ -90,8 +92,7 @@ local function followPlayer(targetName)
 		local dist = (myPos - targetPos).Magnitude
 		if dist > 5 then
 			local direction = (targetPos - myPos).Unit
-			local desiredPos = targetPos - direction * 4
-			myHum:MoveTo(desiredPos)
+			myHum:MoveTo(targetPos - direction * 4)
 		else
 			myHum:MoveTo(myPos)
 		end
@@ -245,10 +246,7 @@ local function setInvisibleFE(enabled)
 end
 
 local function setGodMode(enabled)
-	if godModeConnection then
-		godModeConnection:Disconnect()
-		godModeConnection = nil
-	end
+	if godModeConnection then godModeConnection:Disconnect() godModeConnection = nil end
 	if enabled then
 		godModeConnection = RunService.Heartbeat:Connect(function()
 			local char = localPlayer.Character
@@ -348,7 +346,60 @@ local function bigHead(enabled)
 	end
 end
 
-local function processCommand(message, speaker)
+local function setWalkAnim(enabled)
+	local char = localPlayer.Character
+	if not char then return end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if not hum then return end
+	hum.WalkSpeed = enabled and speedValue or 0
+end
+
+local function crouchMode(enabled)
+	local char = localPlayer.Character
+	if not char then return end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not hum or not root then return end
+	if enabled then
+		hum.HipHeight = 0.5
+	else
+		hum.HipHeight = 2
+	end
+end
+
+local function zoomCamera(dist)
+	local char = localPlayer.Character
+	if not char then return end
+	local cam = game:GetService("Workspace").CurrentCamera
+	cam.CameraType = Enum.CameraType.Attach
+	task.delay(0.1, function()
+		cam.CameraType = Enum.CameraType.Custom
+	end)
+end
+
+local function stopLoop()
+	if loopConnection then loopConnection:Disconnect() loopConnection = nil end
+	loopCmd = nil
+	sendWhisper("Loop stopped.")
+end
+
+local processCommand
+
+local function startLoop(cmd, interval)
+	stopLoop()
+	loopCmd = cmd
+	local iv = interval or 1
+	loopConnection = RunService.Heartbeat:Connect(function()
+		local now = tick()
+		if now - lastLoopSent >= iv then
+			lastLoopSent = now
+			processCommand("." .. cmd, OPERATOR)
+		end
+	end)
+	sendWhisper("Looping: " .. cmd .. " every " .. iv .. "s")
+end
+
+processCommand = function(message, speaker)
 	if not isOperator(speaker) then return end
 
 	local cleaned = message
@@ -467,11 +518,32 @@ local function processCommand(message, speaker)
 	elseif cmd == "bighead" then
 		if rest == "on" then bigHead(true)
 		elseif rest == "off" then bigHead(false) end
+	elseif cmd == "crouch" then
+		if rest == "on" then crouchMode(true)
+		elseif rest == "off" then crouchMode(false) end
+	elseif cmd == "loop" then
+		if rest ~= "" then
+			local parts = {}
+			for w in rest:gmatch("%S+") do table.insert(parts, w) end
+			local interval = tonumber(parts[#parts])
+			local cmdPart
+			if interval then
+				table.remove(parts, #parts)
+				cmdPart = table.concat(parts, " ")
+			else
+				interval = 1
+				cmdPart = rest
+			end
+			if cmdPart ~= "" then startLoop(cmdPart, interval) end
+		end
+	elseif cmd == "loopstop" then
+		stopLoop()
 	elseif cmd == "status" then
-		if following then sendWhisper("Active.")
-		else sendWhisper("Idle.") end
+		local loopStatus = loopCmd and ("Looping: " .. loopCmd) or "No loop."
+		local followStatus = following and "Following." or "Idle."
+		sendWhisper(followStatus .. " " .. loopStatus)
 	elseif cmd == "commands" then
-		sendWhisper(".follow .goto .patrol .looptp .stop .say .sit .stand .e .emotes .speed .jump .jumppower .noclip .freeze .unfreeze .tp .invisible .godmode .reset .fw .bw .l .r .tl .tr .lookat .spin .fling .gravity .gravityoff .gravityreset .float .bighead .status")
+		sendWhisper(".follow .goto .patrol .looptp .stop .say .sit .stand .e .emotes .speed .jump .jumppower .noclip .freeze .unfreeze .tp .invisible .godmode .reset .fw .bw .l .r .tl .tr .lookat .spin .fling .gravity .gravityoff .gravityreset .float .bighead .crouch .loop .loopstop .status")
 	end
 end
 
