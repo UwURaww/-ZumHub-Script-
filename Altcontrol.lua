@@ -1,54 +1,23 @@
-print("hello") 
-print("it work") 
+print("IT work") 
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local TextChatService = game:GetService("TextChatService")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
 local localPlayer = Players.LocalPlayer
 
-local OWNER = "zumartengge6no10"
+local OPERATOR = "zumartengge6no10"
 
 local following = nil
 local followConnection = nil
-local whisperMode = false
 local speedValue = 16
 local jumpValue = 50
-local noclipEnabled = false
 local noclipConnection = nil
-local freezeEnabled = false
-local sprintEnabled = false
-local invisible = false
-
-local r6Emotes = {
-	wave = "wave",
-	laugh = "laugh",
-	dance = "dance",
-	dance2 = "dance2",
-	dance3 = "dance3",
-	cheer = "cheer",
-	point = "point",
-}
 
 local function sendWhisper(message)
-	task.wait(math.random(4, 12) / 10)
-	local channels = TextChatService:FindFirstChild("TextChannels")
-	if not channels then return end
-	for _, channel in ipairs(channels:GetChildren()) do
-		if channel.Name:lower():find("rbxwhisper") and channel.Name:lower():find(localPlayer.Name:lower()) then
-			channel:SendAsync(message)
-			return
-		end
-	end
-end
-
-local function sendChat(message)
-	task.wait(math.random(4, 12) / 10)
-	local channel = TextChatService:FindFirstChild("TextChannels") and TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-	if channel then
-		channel:SendAsync(message)
-	end
+	game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", {
+		Text = "[Bot] " .. message,
+		Color = Color3.fromRGB(100, 200, 255),
+		FontSize = Enum.FontSize.Size18,
+	})
 end
 
 local function getCharacterRig()
@@ -61,17 +30,17 @@ local function getCharacterRig()
 end
 
 local function doEmote(emoteName)
-	local rig = getCharacterRig()
-	if not rig then return end
-	if rig == "R6" then
-		local mapped = r6Emotes[emoteName:lower()]
-		if mapped then
-			local general = TextChatService:FindFirstChild("TextChannels") and TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-			if general then general:SendAsync("/e " .. mapped) end
-		end
-	else
-		local general = TextChatService:FindFirstChild("TextChannels") and TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-		if general then general:SendAsync("/e " .. emoteName) end
+	local general = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
+	if general then
+		general:SendAsync("/e " .. emoteName)
+	end
+end
+
+local function sendChat(message)
+	task.wait(math.random(4, 12) / 10)
+	local general = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
+	if general then
+		general:SendAsync(message)
 	end
 end
 
@@ -87,7 +56,7 @@ local function followPlayer(targetName)
 	stopFollowing()
 	local target = nil
 	if targetName == "me" then
-		target = localPlayer
+		target = Players:FindFirstChild(OPERATOR)
 	else
 		for _, p in ipairs(Players:GetPlayers()) do
 			if p.Name:lower():find(targetName:lower()) or p.DisplayName:lower():find(targetName:lower()) then
@@ -118,52 +87,37 @@ local function setSpeed(amount)
 	local char = localPlayer.Character
 	if not char then return end
 	local hum = char:FindFirstChildOfClass("Humanoid")
-	if hum then
-		hum.WalkSpeed = amount
-		speedValue = amount
-	end
+	if hum then hum.WalkSpeed = amount speedValue = amount end
 end
 
 local function setJump(amount)
 	local char = localPlayer.Character
 	if not char then return end
 	local hum = char:FindFirstChildOfClass("Humanoid")
-	if hum then
-		hum.JumpPower = amount
-		jumpValue = amount
-	end
+	if hum then hum.JumpPower = amount jumpValue = amount end
 end
 
 local function setNoclip(enabled)
-	noclipEnabled = enabled
-	if noclipConnection then
-		noclipConnection:Disconnect()
-		noclipConnection = nil
-	end
+	if noclipConnection then noclipConnection:Disconnect() noclipConnection = nil end
 	if enabled then
 		noclipConnection = RunService.Stepped:Connect(function()
 			local char = localPlayer.Character
 			if not char then return end
 			for _, part in ipairs(char:GetDescendants()) do
-				if part:IsA("BasePart") then
-					part.CanCollide = false
-				end
+				if part:IsA("BasePart") then part.CanCollide = false end
 			end
 		end)
 	else
 		local char = localPlayer.Character
 		if char then
 			for _, part in ipairs(char:GetDescendants()) do
-				if part:IsA("BasePart") then
-					part.CanCollide = true
-				end
+				if part:IsA("BasePart") then part.CanCollide = true end
 			end
 		end
 	end
 end
 
 local function freezePlayer(enabled)
-	freezeEnabled = enabled
 	local char = localPlayer.Character
 	if not char then return end
 	local root = char:FindFirstChild("HumanoidRootPart")
@@ -202,43 +156,15 @@ local function tpToCoords(x, y, z)
 	local myChar = localPlayer.Character
 	if not myChar then return end
 	local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-	if myRoot then
-		myRoot.CFrame = CFrame.new(x, y, z)
-	end
+	if myRoot then myRoot.CFrame = CFrame.new(x, y, z) end
 end
 
 local function setInvisible(enabled)
-	invisible = enabled
 	local char = localPlayer.Character
 	if not char then return end
 	for _, part in ipairs(char:GetDescendants()) do
 		if part:IsA("BasePart") or part:IsA("Decal") then
 			part.Transparency = enabled and 1 or 0
-		end
-	end
-end
-
-local function resetChar()
-	local char = localPlayer.Character
-	if not char then return end
-	local hum = char:FindFirstChildOfClass("Humanoid")
-	if hum then hum.Health = 0 end
-end
-
-local function respawnAt(target)
-	local char = localPlayer.Character
-	if not char then return end
-	local root = char:FindFirstChild("HumanoidRootPart")
-	if not root then return end
-	local savedCFrame = root.CFrame
-	resetChar()
-	localPlayer.CharacterAdded:Wait()
-	task.wait(0.5)
-	local newChar = localPlayer.Character
-	if newChar then
-		local newRoot = newChar:FindFirstChild("HumanoidRootPart")
-		if newRoot then
-			newRoot.CFrame = savedCFrame
 		end
 	end
 end
@@ -267,8 +193,8 @@ local function loopTp(targetName)
 	end)
 end
 
-local function processCommand(message)
-	if localPlayer.Name ~= OWNER then return end
+local function processCommand(message, speaker)
+	if speaker ~= OPERATOR then return end
 	if message:sub(1, 1) ~= "." then return end
 
 	local args = {}
@@ -280,14 +206,6 @@ local function processCommand(message)
 	if not cmd then return end
 	table.remove(args, 1)
 	local rest = table.concat(args, " ")
-
-	if cmd == "w" then
-		if rest:lower() == "on" then whisperMode = true
-		elseif rest:lower() == "off" then whisperMode = false end
-		return
-	end
-
-	if whisperMode then return end
 
 	if cmd == "follow" then
 		if rest ~= "" then followPlayer(rest) end
@@ -323,7 +241,7 @@ local function processCommand(message)
 		if rig == "R6" then
 			sendWhisper("R6: wave laugh dance dance2 dance3 cheer point")
 		else
-			sendWhisper("R15: any ugc emote name you own")
+			sendWhisper("R15: any ugc emote you own")
 		end
 
 	elseif cmd == "speed" then
@@ -357,10 +275,11 @@ local function processCommand(message)
 		elseif rest == "off" then setInvisible(false) end
 
 	elseif cmd == "reset" then
-		resetChar()
-
-	elseif cmd == "respawn" then
-		respawnAt()
+		local char = localPlayer.Character
+		if char then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if hum then hum.Health = 0 end
+		end
 
 	elseif cmd == "status" then
 		if following then
@@ -370,10 +289,20 @@ local function processCommand(message)
 		end
 
 	elseif cmd == "commands" then
-		sendWhisper(".follow .looptp .stop .say .sit .stand .e .speed .jump .noclip .freeze .unfreeze .tp .invisible .reset .respawn .status .w")
+		sendWhisper(".follow .looptp .stop .say .sit .stand .e .speed .jump .noclip .freeze .unfreeze .tp .invisible .reset .status")
 	end
 end
 
-localPlayer.Chatted:Connect(function(message)
-	processCommand(message)
+Players.PlayerAdded:Connect(function(player)
+	player.Chatted:Connect(function(message)
+		processCommand(message, player.Name)
+	end)
 end)
+
+for _, player in ipairs(Players:GetPlayers()) do
+	player.Chatted:Connect(function(message)
+		processCommand(message, player.Name)
+	end)
+end
+
+sendWhisper("Robot ready. Listening to " .. OPERATOR)
