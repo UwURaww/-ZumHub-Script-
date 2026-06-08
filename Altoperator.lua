@@ -10,32 +10,61 @@ local viewConnection = nil
 local viewingRobot = false
 local savedCameraMode = nil
 local useWhisper = true
-local robotName = ""
 local loopConnection = nil
 local loopCmd = nil
 local pingConnection = nil
 local COOLDOWN = 0.8
 local lastSent = 0
-local guiWidth = 280
-local guiHeight = 440
+local guiWidth = 300
+local guiHeight = 460
 local statusDotRef = nil
+local quickTabHidden = false
+local loopLabelRef = nil
 
-local SAVE_KEY = "botaktak_ireng"
+local BOTS_SAVE_KEY = "RobotOperatorBots_v2"
+local ACTIVE_BOT_KEY = "RobotOperatorActive_v2"
 
-local function saveRobotName(name)
-	pcall(function()
-		game:GetService("RunService"):SetAttribute(SAVE_KEY, name)
-	end)
-	localPlayer:SetAttribute(SAVE_KEY, name)
+local bots = {}
+local activeBotIndex = 1
+
+local function saveBots()
+	local encoded = {}
+	for i, bot in ipairs(bots) do
+		encoded[i] = bot.name .. "|" .. bot.nick
+	end
+	localPlayer:SetAttribute(BOTS_SAVE_KEY, table.concat(encoded, ";;"))
+	localPlayer:SetAttribute(ACTIVE_BOT_KEY, tostring(activeBotIndex))
 end
 
-local function loadRobotName()
-	local v = localPlayer:GetAttribute(SAVE_KEY)
-	if v and v ~= "" then return v end
-	return ""
+local function loadBots()
+	local raw = localPlayer:GetAttribute(BOTS_SAVE_KEY)
+	local activeRaw = localPlayer:GetAttribute(ACTIVE_BOT_KEY)
+	bots = {}
+	if raw and raw ~= "" then
+		for _, entry in ipairs(raw:split(";;")) do
+			local parts = entry:split("|")
+			if parts[1] and parts[1] ~= "" then
+				table.insert(bots, {name = parts[1], nick = parts[2] or parts[1]})
+			end
+		end
+	end
+	if #bots == 0 then
+		table.insert(bots, {name = "", nick = "Bot 1"})
+	end
+	activeBotIndex = tonumber(activeRaw) or 1
+	if activeBotIndex > #bots then activeBotIndex = 1 end
 end
 
-robotName = loadRobotName()
+loadBots()
+
+local function getActiveBot()
+	return bots[activeBotIndex] or bots[1]
+end
+
+local function getRobotName()
+	local bot = getActiveBot()
+	return bot and bot.name or ""
+end
 
 local function sendWhisper(message)
 	game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", {
@@ -45,16 +74,38 @@ local function sendWhisper(message)
 	})
 end
 
-local function sendCommand(cmd)
+local function parsePrefix(cmd)
+	local s = cmd:gsub("^%s+", ""):gsub("%s+$", "")
+	if s:sub(1,2) == ". " then s = "." .. s:sub(3) end
+	return s
+end
+
+local function sendCommandToBot(cmd, botName)
 	local now = tick()
 	if now - lastSent < COOLDOWN then return end
 	lastSent = now
 	local channel = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
 	if not channel then return end
-	if useWhisper and robotName ~= "" then
-		channel:SendAsync("/w " .. robotName .. " " .. cmd)
+	local cleaned = parsePrefix(cmd)
+	if useWhisper and botName ~= "" then
+		channel:SendAsync("/w " .. botName .. " " .. cleaned)
 	else
-		channel:SendAsync(cmd)
+		channel:SendAsync(cleaned)
+	end
+end
+
+local function sendCommand(cmd)
+	sendCommandToBot(cmd, getRobotName())
+end
+
+local function sendCommandToAll(cmd)
+	for _, bot in ipairs(bots) do
+		if bot.name ~= "" then
+			task.spawn(function()
+				task.wait(0.1)
+				sendCommandToBot(cmd, bot.name)
+			end)
+		end
 	end
 end
 
@@ -67,25 +118,36 @@ local function startLoop(cmd)
 			lastSent = now
 			local channel = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
 			if not channel then return end
-			if useWhisper and robotName ~= "" then
-				channel:SendAsync("/w " .. robotName .. " " .. loopCmd)
+			local cleaned = parsePrefix(loopCmd)
+			local rn = getRobotName()
+			if useWhisper and rn ~= "" then
+				channel:SendAsync("/w " .. rn .. " " .. cleaned)
 			else
-				channel:SendAsync(loopCmd)
+				channel:SendAsync(cleaned)
 			end
 		end
 	end)
+	if loopLabelRef then
+		loopLabelRef.Text = "⟳ " .. cmd
+		loopLabelRef.TextColor3 = Color3.fromRGB(255, 120, 120)
+	end
 	sendWhisper("Looping: " .. cmd)
 end
 
 local function stopLoop()
 	if loopConnection then loopConnection:Disconnect() loopConnection = nil end
 	loopCmd = nil
+	if loopLabelRef then
+		loopLabelRef.Text = "⟳ No loop"
+		loopLabelRef.TextColor3 = Color3.fromRGB(120, 120, 150)
+	end
 	sendWhisper("Loop stopped.")
 end
 
 local function startView()
-	if robotName == "" then sendWhisper("Set robot name first!") return end
-	local robot = Players:FindFirstChild(robotName)
+	local rn = getRobotName()
+	if rn == "" then sendWhisper("Set robot name first!") return end
+	local robot = Players:FindFirstChild(rn)
 	if not robot or not robot.Character then sendWhisper("Robot not found.") return end
 	local cam = game:GetService("Workspace").CurrentCamera
 	savedCameraMode = cam.CameraType
@@ -93,7 +155,7 @@ local function startView()
 	viewingRobot = true
 	viewConnection = RunService.Heartbeat:Connect(function()
 		if not viewingRobot then return end
-		local r = Players:FindFirstChild(robotName)
+		local r = Players:FindFirstChild(rn)
 		if not r or not r.Character then return end
 		local rp = r.Character:FindFirstChild("HumanoidRootPart")
 		if not rp then return end
@@ -110,10 +172,11 @@ end
 
 local function updateStatusDot()
 	if not statusDotRef then return end
-	local robot = robotName ~= "" and Players:FindFirstChild(robotName)
+	local rn = getRobotName()
+	local robot = rn ~= "" and Players:FindFirstChild(rn)
 	local connected = robot ~= nil and robot.Character ~= nil
 	statusDotRef.BackgroundColor3 = connected and Color3.fromRGB(20, 80, 30) or Color3.fromRGB(80, 20, 20)
-	statusDotRef.Text = connected and "● CONNECTED" or "● OFFLINE"
+	statusDotRef.Text = connected and ("● " .. (getActiveBot().nick or rn) .. " ONLINE") or ("● " .. (getActiveBot().nick or "Bot") .. " OFFLINE")
 	statusDotRef.TextColor3 = connected and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(255, 80, 80)
 end
 
@@ -127,13 +190,13 @@ local COMMANDS = {
 	{label = ".jump", cmd = ".jump"},
 	{label = ".reset", cmd = ".reset"},
 	{label = ".fling", cmd = ".fling"},
-	{label = ".wave", cmd = ".e wave"},
-	{label = ".laugh", cmd = ".e laugh"},
-	{label = ".cheer", cmd = ".e cheer"},
-	{label = ".point", cmd = ".e point"},
-	{label = ".dance", cmd = ".e dance"},
-	{label = ".dance2", cmd = ".e dance2"},
-	{label = ".dance3", cmd = ".e dance3"},
+	{label = ".wave", cmd = ".wave"},
+	{label = ".laugh", cmd = ".laugh"},
+	{label = ".cheer", cmd = ".cheer"},
+	{label = ".point", cmd = ".point"},
+	{label = ".dance", cmd = ".dance"},
+	{label = ".dance2", cmd = ".dance2"},
+	{label = ".dance3", cmd = ".dance3"},
 	{label = ".gravityoff", cmd = ".gravityoff"},
 	{label = ".gravityreset", cmd = ".gravityreset"},
 	{label = ".tpme", cmd = ".tpme"},
@@ -142,45 +205,151 @@ local COMMANDS = {
 	{label = ".health", cmd = ".health"},
 	{label = ".pos", cmd = ".pos"},
 	{label = ".rig", cmd = ".rig"},
-	{label = ".loopstop", cmd = ".loopstop"},
+	{label = ".unloop", cmd = ".unloop"},
 	{label = ".status", cmd = ".status"},
-	{label = "noclip", toggle = true, on = ".noclip on", off = ".noclip off"},
-	{label = "invisible", toggle = true, on = ".invisible on", off = ".invisible off"},
-	{label = "godmode", toggle = true, on = ".godmode on", off = ".godmode off"},
+	{label = ".aliases", cmd = ".aliases"},
+	{label = "noclip", toggle = true, on = ".nc on", off = ".nc off"},
+	{label = "invisible", toggle = true, on = ".inv on", off = ".inv off"},
+	{label = "godmode", toggle = true, on = ".gm on", off = ".gm off"},
 	{label = "spin", toggle = true, on = ".spin on", off = ".spin off"},
-	{label = "float", toggle = true, on = ".float on", off = ".float off"},
-	{label = "bighead", toggle = true, on = ".bighead on", off = ".bighead off"},
-	{label = "freeze", toggle = true, on = ".freeze", off = ".unfreeze"},
-	{label = "crouch", toggle = true, on = ".crouch on", off = ".crouch off"},
-	{label = "lockcontrol", toggle = true, on = ".lockcontrol on", off = ".lockcontrol off"},
-	{label = "mirror", toggle = true, on = ".mirror on", off = ".mirror off"},
+	{label = "float", toggle = true, on = ".fl on", off = ".fl off"},
+	{label = "bighead", toggle = true, on = ".bh on", off = ".bh off"},
+	{label = "freeze", toggle = true, on = ".frz", off = ".ufrz"},
+	{label = "crouch", toggle = true, on = ".cr on", off = ".cr off"},
+	{label = "lockcontrol", toggle = true, on = ".lck on", off = ".lck off"},
+	{label = "mirror", toggle = true, on = ".mir on", off = ".mir off"},
 	{label = ".fw [n]", cmd = nil, input = true, base = ".fw"},
-	{label = ".bw [n]", cmd = nil, input = true, base = ".bw"},
-	{label = ".l [n]", cmd = nil, input = true, base = ".l"},
-	{label = ".r [n]", cmd = nil, input = true, base = ".r"},
+	{label = ".bk [n]", cmd = nil, input = true, base = ".bk"},
+	{label = ".lt [n]", cmd = nil, input = true, base = ".lt"},
+	{label = ".rt [n]", cmd = nil, input = true, base = ".rt"},
 	{label = ".tl [deg]", cmd = nil, input = true, base = ".tl"},
 	{label = ".tr [deg]", cmd = nil, input = true, base = ".tr"},
-	{label = ".follow [n]", cmd = nil, input = true, base = ".follow"},
-	{label = ".orbit [n]", cmd = nil, input = true, base = ".orbit"},
-	{label = ".goto [n]", cmd = nil, input = true, base = ".goto"},
-	{label = ".looptp [n]", cmd = nil, input = true, base = ".looptp"},
-	{label = ".lookat [n]", cmd = nil, input = true, base = ".lookat"},
+	{label = ".flw [n]", cmd = nil, input = true, base = ".flw"},
+	{label = ".orb [n]", cmd = nil, input = true, base = ".orb"},
+	{label = ".gt [n]", cmd = nil, input = true, base = ".gt"},
+	{label = ".ltp [n]", cmd = nil, input = true, base = ".ltp"},
+	{label = ".lk [n]", cmd = nil, input = true, base = ".lk"},
 	{label = ".tp [n]", cmd = nil, input = true, base = ".tp"},
 	{label = ".say [txt]", cmd = nil, input = true, base = ".say"},
 	{label = ".e [name]", cmd = nil, input = true, base = ".e"},
-	{label = ".patrol [n1 n2]", cmd = nil, input = true, base = ".patrol"},
-	{label = ".gravity [n]", cmd = nil, input = true, base = ".gravity"},
-	{label = ".transparency [n]", cmd = nil, input = true, base = ".transparency"},
-	{label = ".size [n]", cmd = nil, input = true, base = ".size"},
+	{label = ".ptr [n1 n2]", cmd = nil, input = true, base = ".ptr"},
+	{label = ".grv [n]", cmd = nil, input = true, base = ".grv"},
+	{label = ".trp [n]", cmd = nil, input = true, base = ".trp"},
+	{label = ".sz [n]", cmd = nil, input = true, base = ".sz"},
+	{label = ".spd [n]", cmd = nil, input = true, base = ".spd"},
+	{label = ".jp [n]", cmd = nil, input = true, base = ".jp"},
 	{label = ".loop [cmd]", cmd = nil, input = true, base = ".loop"},
 }
 
 local stepPresets = {5, 10, 20, 50}
 
-local loopLabelRef = nil
+local botsScrollRef = nil
+
+local function refreshBotsScroll()
+	if not botsScrollRef then return end
+	for _, child in ipairs(botsScrollRef:GetChildren()) do
+		if not child:IsA("UIListLayout") and not child:IsA("UIPadding") then
+			child:Destroy()
+		end
+	end
+
+	for i, bot in ipairs(bots) do
+		local rowFrame = Instance.new("Frame")
+		rowFrame.Size = UDim2.new(1, -8, 0, 32)
+		rowFrame.BackgroundColor3 = (i == activeBotIndex) and Color3.fromRGB(30, 60, 30) or Color3.fromRGB(20, 20, 32)
+		rowFrame.BorderSizePixel = 0
+		rowFrame.Parent = botsScrollRef
+		local rc = Instance.new("UICorner") rc.CornerRadius = UDim.new(0,5) rc.Parent = rowFrame
+		if i == activeBotIndex then
+			local rs = Instance.new("UIStroke") rs.Color = Color3.fromRGB(80,200,100) rs.Thickness = 1 rs.Parent = rowFrame
+		end
+
+		local nickBox = Instance.new("TextBox")
+		nickBox.Size = UDim2.new(0, 70, 0, 24)
+		nickBox.Position = UDim2.new(0, 4, 0, 4)
+		nickBox.BackgroundColor3 = Color3.fromRGB(18,18,28)
+		nickBox.TextColor3 = Color3.fromRGB(200,200,240)
+		nickBox.PlaceholderText = "nick"
+		nickBox.PlaceholderColor3 = Color3.fromRGB(80,80,110)
+		nickBox.Text = bot.nick
+		nickBox.TextScaled = true
+		nickBox.Font = Enum.Font.Gotham
+		nickBox.BorderSizePixel = 0
+		nickBox.ClearTextOnFocus = false
+		nickBox.Parent = rowFrame
+		local nc2 = Instance.new("UICorner") nc2.CornerRadius = UDim.new(0,4) nc2.Parent = nickBox
+		nickBox:GetPropertyChangedSignal("Text"):Connect(function()
+			bots[i].nick = nickBox.Text
+			saveBots()
+		end)
+
+		local nameBox = Instance.new("TextBox")
+		nameBox.Size = UDim2.new(0, 90, 0, 24)
+		nameBox.Position = UDim2.new(0, 78, 0, 4)
+		nameBox.BackgroundColor3 = Color3.fromRGB(18,18,28)
+		nameBox.TextColor3 = Color3.fromRGB(220,220,255)
+		nameBox.PlaceholderText = "username"
+		nameBox.PlaceholderColor3 = Color3.fromRGB(80,80,110)
+		nameBox.Text = bot.name
+		nameBox.TextScaled = true
+		nameBox.Font = Enum.Font.Gotham
+		nameBox.BorderSizePixel = 0
+		nameBox.ClearTextOnFocus = false
+		nameBox.Parent = rowFrame
+		local nbc = Instance.new("UICorner") nbc.CornerRadius = UDim.new(0,4) nbc.Parent = nameBox
+		nameBox:GetPropertyChangedSignal("Text"):Connect(function()
+			bots[i].name = nameBox.Text
+			saveBots()
+			updateStatusDot()
+		end)
+
+		local selectBtn = Instance.new("TextButton")
+		selectBtn.Size = UDim2.new(0, 36, 0, 24)
+		selectBtn.Position = UDim2.new(0, 172, 0, 4)
+		selectBtn.BackgroundColor3 = (i == activeBotIndex) and Color3.fromRGB(30,100,50) or Color3.fromRGB(40,40,60)
+		selectBtn.Text = i == activeBotIndex and "✓" or "USE"
+		selectBtn.TextColor3 = Color3.fromRGB(255,255,255)
+		selectBtn.TextScaled = true
+		selectBtn.Font = Enum.Font.GothamBold
+		selectBtn.BorderSizePixel = 0
+		selectBtn.Parent = rowFrame
+		local sbc = Instance.new("UICorner") sbc.CornerRadius = UDim.new(0,4) sbc.Parent = selectBtn
+		selectBtn.MouseButton1Click:Connect(function()
+			activeBotIndex = i
+			saveBots()
+			updateStatusDot()
+			refreshBotsScroll()
+			sendWhisper("Active bot: " .. (bot.nick ~= "" and bot.nick or bot.name))
+		end)
+
+		local delBtn = Instance.new("TextButton")
+		delBtn.Size = UDim2.new(0, 24, 0, 24)
+		delBtn.Position = UDim2.new(0, 212, 0, 4)
+		delBtn.BackgroundColor3 = Color3.fromRGB(120,30,30)
+		delBtn.Text = "✕"
+		delBtn.TextColor3 = Color3.fromRGB(255,255,255)
+		delBtn.TextScaled = true
+		delBtn.Font = Enum.Font.GothamBold
+		delBtn.BorderSizePixel = 0
+		delBtn.Parent = rowFrame
+		local dbc = Instance.new("UICorner") dbc.CornerRadius = UDim.new(0,4) dbc.Parent = delBtn
+		delBtn.MouseButton1Click:Connect(function()
+			if #bots > 1 then
+				table.remove(bots, i)
+				if activeBotIndex > #bots then activeBotIndex = #bots end
+				saveBots()
+				updateStatusDot()
+				refreshBotsScroll()
+			else
+				sendWhisper("Need at least one bot slot.")
+			end
+		end)
+	end
+end
 
 local function createSettingsGui()
 	if settingsGui then settingsGui:Destroy() settingsGui = nil end
+	if pingConnection then pingConnection:Disconnect() pingConnection = nil end
 	if not settingsVisible then return end
 
 	local sg = Instance.new("ScreenGui")
@@ -189,8 +358,8 @@ local function createSettingsGui()
 	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	sg.Parent = localPlayer.PlayerGui
 
-	local panelW = 240
-	local panelH = 480
+	local panelW = 260
+	local panelH = 580
 
 	local panel = Instance.new("Frame")
 	panel.Size = UDim2.new(0, panelW, 0, panelH)
@@ -201,23 +370,15 @@ local function createSettingsGui()
 	panel.Draggable = true
 	panel.Parent = sg
 
-	local pc = Instance.new("UICorner")
-	pc.CornerRadius = UDim.new(0, 10)
-	pc.Parent = panel
-
-	local ps = Instance.new("UIStroke")
-	ps.Color = Color3.fromRGB(100, 100, 160)
-	ps.Thickness = 1.5
-	ps.Parent = panel
+	local pc = Instance.new("UICorner") pc.CornerRadius = UDim.new(0,10) pc.Parent = panel
+	local ps = Instance.new("UIStroke") ps.Color = Color3.fromRGB(100,100,160) ps.Thickness = 1.5 ps.Parent = panel
 
 	local titleBar = Instance.new("Frame")
 	titleBar.Size = UDim2.new(1, 0, 0, 28)
 	titleBar.BackgroundColor3 = Color3.fromRGB(16, 16, 26)
 	titleBar.BorderSizePixel = 0
 	titleBar.Parent = panel
-	local tbc = Instance.new("UICorner")
-	tbc.CornerRadius = UDim.new(0, 10)
-	tbc.Parent = titleBar
+	local tbc = Instance.new("UICorner") tbc.CornerRadius = UDim.new(0,10) tbc.Parent = titleBar
 
 	local titleLbl = Instance.new("TextLabel")
 	titleLbl.Size = UDim2.new(1, -36, 1, 0)
@@ -240,9 +401,7 @@ local function createSettingsGui()
 	closeS.Font = Enum.Font.GothamBold
 	closeS.BorderSizePixel = 0
 	closeS.Parent = titleBar
-	local csc = Instance.new("UICorner")
-	csc.CornerRadius = UDim.new(0, 4)
-	csc.Parent = closeS
+	local csc = Instance.new("UICorner") csc.CornerRadius = UDim.new(0,4) csc.Parent = closeS
 	closeS.MouseButton1Click:Connect(function()
 		settingsVisible = false
 		if pingConnection then pingConnection:Disconnect() pingConnection = nil end
@@ -256,8 +415,8 @@ local function createSettingsGui()
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 3
-	scroll.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 160)
-	scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	scroll.ScrollBarImageColor3 = Color3.fromRGB(100,100,160)
+	scroll.CanvasSize = UDim2.new(0,0,0,0)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	scroll.Parent = panel
 
@@ -279,20 +438,35 @@ local function createSettingsGui()
 		lbl.Size = UDim2.new(0, sw, 0, 16)
 		lbl.BackgroundTransparency = 1
 		lbl.Text = text
-		lbl.TextColor3 = Color3.fromRGB(120, 120, 180)
+		lbl.TextColor3 = Color3.fromRGB(120,120,180)
 		lbl.TextScaled = true
 		lbl.Font = Enum.Font.GothamBold
 		lbl.TextXAlignment = Enum.TextXAlignment.Left
 		lbl.Parent = scroll
 	end
 
+	local function makeSettBtn(text, color, callback)
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(0, sw, 0, 26)
+		btn.BackgroundColor3 = color
+		btn.Text = text
+		btn.TextColor3 = Color3.fromRGB(255,255,255)
+		btn.TextScaled = true
+		btn.Font = Enum.Font.GothamBold
+		btn.BorderSizePixel = 0
+		btn.Parent = scroll
+		local bc = Instance.new("UICorner") bc.CornerRadius = UDim.new(0,5) bc.Parent = btn
+		btn.MouseButton1Click:Connect(callback)
+		return btn
+	end
+
 	local function makeBox(placeholder, default)
 		local box = Instance.new("TextBox")
 		box.Size = UDim2.new(0, sw, 0, 26)
-		box.BackgroundColor3 = Color3.fromRGB(20, 20, 32)
-		box.TextColor3 = Color3.fromRGB(220, 220, 255)
+		box.BackgroundColor3 = Color3.fromRGB(20,20,32)
+		box.TextColor3 = Color3.fromRGB(220,220,255)
 		box.PlaceholderText = placeholder
-		box.PlaceholderColor3 = Color3.fromRGB(80, 80, 110)
+		box.PlaceholderColor3 = Color3.fromRGB(80,80,110)
 		box.Text = default or ""
 		box.TextScaled = true
 		box.Font = Enum.Font.Gotham
@@ -304,28 +478,13 @@ local function createSettingsGui()
 		return box
 	end
 
-	local function makeSettBtn(text, color, callback)
-		local btn = Instance.new("TextButton")
-		btn.Size = UDim2.new(0, sw, 0, 26)
-		btn.BackgroundColor3 = color
-		btn.Text = text
-		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-		btn.TextScaled = true
-		btn.Font = Enum.Font.GothamBold
-		btn.BorderSizePixel = 0
-		btn.Parent = scroll
-		local bc = Instance.new("UICorner") bc.CornerRadius = UDim.new(0,5) bc.Parent = btn
-		btn.MouseButton1Click:Connect(callback)
-		return btn
-	end
-
 	local function makeSettToggle(text, initState, onColor, offColor, callback)
 		local state = initState
 		local btn = Instance.new("TextButton")
 		btn.Size = UDim2.new(0, sw, 0, 26)
 		btn.BackgroundColor3 = state and onColor or offColor
 		btn.Text = text .. (state and ": ON" or ": OFF")
-		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		btn.TextColor3 = Color3.fromRGB(255,255,255)
 		btn.TextScaled = true
 		btn.Font = Enum.Font.GothamBold
 		btn.BorderSizePixel = 0
@@ -342,9 +501,9 @@ local function createSettingsGui()
 
 	local statusDot = Instance.new("TextLabel")
 	statusDot.Size = UDim2.new(0, sw, 0, 26)
-	statusDot.BackgroundColor3 = Color3.fromRGB(80, 20, 20)
+	statusDot.BackgroundColor3 = Color3.fromRGB(80,20,20)
 	statusDot.Text = "● OFFLINE"
-	statusDot.TextColor3 = Color3.fromRGB(255, 80, 80)
+	statusDot.TextColor3 = Color3.fromRGB(255,80,80)
 	statusDot.TextScaled = true
 	statusDot.Font = Enum.Font.GothamBold
 	statusDot.BorderSizePixel = 0
@@ -353,12 +512,72 @@ local function createSettingsGui()
 	statusDotRef = statusDot
 	updateStatusDot()
 
-	sectionLabel("Robot Username")
-	local robotBox = makeBox("robot username...", robotName)
-	robotBox:GetPropertyChangedSignal("Text"):Connect(function()
-		robotName = robotBox.Text
-		saveRobotName(robotName)
-		updateStatusDot()
+	sectionLabel("Bot Management")
+
+	local botsScroll = Instance.new("ScrollingFrame")
+	botsScroll.Size = UDim2.new(0, sw, 0, 140)
+	botsScroll.BackgroundColor3 = Color3.fromRGB(16,16,24)
+	botsScroll.BorderSizePixel = 0
+	botsScroll.ScrollBarThickness = 3
+	botsScroll.ScrollBarImageColor3 = Color3.fromRGB(100,100,160)
+	botsScroll.CanvasSize = UDim2.new(0,0,0,0)
+	botsScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	botsScroll.Parent = scroll
+	local bsc = Instance.new("UICorner") bsc.CornerRadius = UDim.new(0,5) bsc.Parent = botsScroll
+	local bsLayout = Instance.new("UIListLayout")
+	bsLayout.Padding = UDim.new(0, 3)
+	bsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	bsLayout.Parent = botsScroll
+	local bsPad = Instance.new("UIPadding")
+	bsPad.PaddingTop = UDim.new(0,3) bsPad.PaddingLeft = UDim.new(0,3) bsPad.PaddingRight = UDim.new(0,3)
+	bsPad.Parent = botsScroll
+	botsScrollRef = botsScroll
+	refreshBotsScroll()
+
+	makeSettBtn("+ Add Bot Slot", Color3.fromRGB(30,70,30), function()
+		local num = #bots + 1
+		table.insert(bots, {name = "", nick = "Bot " .. num})
+		saveBots()
+		refreshBotsScroll()
+	end)
+
+	makeSettBtn("Send to ALL bots", Color3.fromRGB(60,40,80), function()
+		sendWhisper("Broadcast mode — next cmd goes to all bots. Use .all [cmd] in chat.")
+	end)
+
+	sectionLabel("Quick Send Command")
+	local quickCmdBox = makeBox("e.g. .spd 60 or .follow me")
+	makeSettBtn("Send to Active Bot", Color3.fromRGB(50,80,50), function()
+		local txt = parsePrefix(quickCmdBox.Text)
+		if txt ~= "" and txt:sub(1,1) == "." then
+			sendCommand(txt)
+			sendWhisper("Sent: " .. txt)
+		else
+			sendWhisper("Start with a dot!")
+		end
+	end)
+	makeSettBtn("Send to ALL Bots", Color3.fromRGB(60,40,80), function()
+		local txt = parsePrefix(quickCmdBox.Text)
+		if txt ~= "" and txt:sub(1,1) == "." then
+			sendCommandToAll(txt)
+			sendWhisper("Broadcast: " .. txt)
+		else
+			sendWhisper("Start with a dot!")
+		end
+	end)
+
+	sectionLabel("Loop Command")
+	local loopCmdBox = makeBox("e.g. .spd 60   or   .follow me")
+	makeSettBtn("Start Loop", Color3.fromRGB(80,40,100), function()
+		local txt = parsePrefix(loopCmdBox.Text)
+		if txt ~= "" and txt:sub(1,1) == "." then
+			startLoop(txt)
+		else
+			sendWhisper("Start with a dot!")
+		end
+	end)
+	makeSettBtn("Stop Loop (Unloop)", Color3.fromRGB(120,40,40), function()
+		stopLoop()
 	end)
 
 	sectionLabel("Communication")
@@ -368,8 +587,20 @@ local function createSettingsGui()
 	end)
 
 	sectionLabel("View Robot Camera")
-	makeSettToggle("View Robot", false, Color3.fromRGB(40,80,160), Color3.fromRGB(40,50,80), function(state)
+	makeSettToggle("View Robot", viewingRobot, Color3.fromRGB(40,80,160), Color3.fromRGB(40,50,80), function(state)
 		if state then startView() else stopView() end
+	end)
+
+	sectionLabel("Quicktab Visibility")
+	makeSettBtn(quickTabHidden and "Show Quicktab" or "Hide Quicktab", Color3.fromRGB(60,60,80), function()
+		if quickTabGui then
+			local mainFrame = quickTabGui:FindFirstChildOfClass("Frame")
+			if mainFrame then
+				quickTabHidden = not quickTabHidden
+				mainFrame.Visible = not quickTabHidden
+			end
+		end
+		createSettingsGui()
 	end)
 
 	sectionLabel("Command Cooldown (s)")
@@ -380,7 +611,7 @@ local function createSettingsGui()
 			COOLDOWN = v
 			sendWhisper("Cooldown: " .. v .. "s")
 		else
-			sendWhisper("Min cooldown: 0.3s")
+			sendWhisper("Min: 0.3s")
 		end
 	end)
 
@@ -389,7 +620,7 @@ local function createSettingsGui()
 	sizesFrame.Size = UDim2.new(0, sw, 0, 26)
 	sizesFrame.BackgroundTransparency = 1
 	sizesFrame.Parent = scroll
-	local sizePresets = {{"S", 220, 380}, {"M", 280, 440}, {"L", 360, 520}, {"XL", 420, 580}}
+	local sizePresets = {{"S",220,380},{"M",300,460},{"L",360,520},{"XL",420,580}}
 	local sBtnW = math.floor(sw / #sizePresets) - 3
 	for i, s in ipairs(sizePresets) do
 		local sb = Instance.new("TextButton")
@@ -414,7 +645,7 @@ local function createSettingsGui()
 	customFrame.Size = UDim2.new(0, sw, 0, 26)
 	customFrame.BackgroundTransparency = 1
 	customFrame.Parent = scroll
-	local hw = math.floor(sw / 2) - 2
+	local hw = math.floor(sw/2) - 2
 	local wBox = Instance.new("TextBox")
 	wBox.Size = UDim2.new(0, hw, 0, 26)
 	wBox.BackgroundColor3 = Color3.fromRGB(20,20,32)
@@ -472,49 +703,42 @@ local function createQuickTab()
 
 	local frame = Instance.new("Frame")
 	frame.Size = UDim2.new(0, guiWidth, 0, guiHeight)
-	frame.Position = UDim2.new(1, -(guiWidth + 15), 0.5, -(guiHeight / 2))
-	frame.BackgroundColor3 = Color3.fromRGB(11, 11, 17)
+	frame.Position = UDim2.new(1, -(guiWidth+15), 0.5, -(guiHeight/2))
+	frame.BackgroundColor3 = Color3.fromRGB(11,11,17)
 	frame.BackgroundTransparency = 0.04
 	frame.BorderSizePixel = 0
 	frame.Active = true
 	frame.Draggable = true
+	frame.Visible = not quickTabHidden
 	frame.Parent = screenGui
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = frame
-
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(255, 180, 80)
-	stroke.Thickness = 1.5
-	stroke.Parent = frame
+	local corner = Instance.new("UICorner") corner.CornerRadius = UDim.new(0,10) corner.Parent = frame
+	local stroke = Instance.new("UIStroke") stroke.Color = Color3.fromRGB(255,180,80) stroke.Thickness = 1.5 stroke.Parent = frame
 
 	local titleBar = Instance.new("Frame")
-	titleBar.Size = UDim2.new(1, 0, 0, 28)
-	titleBar.BackgroundColor3 = Color3.fromRGB(16, 14, 22)
+	titleBar.Size = UDim2.new(1,0,0,28)
+	titleBar.BackgroundColor3 = Color3.fromRGB(16,14,22)
 	titleBar.BorderSizePixel = 0
 	titleBar.Parent = frame
-	local tbc2 = Instance.new("UICorner")
-	tbc2.CornerRadius = UDim.new(0, 10)
-	tbc2.Parent = titleBar
+	local tbc2 = Instance.new("UICorner") tbc2.CornerRadius = UDim.new(0,10) tbc2.Parent = titleBar
 
 	local titleLbl = Instance.new("TextLabel")
-	titleLbl.Size = UDim2.new(1, -60, 1, 0)
-	titleLbl.Position = UDim2.new(0, 10, 0, 0)
+	titleLbl.Size = UDim2.new(1,-80,1,0)
+	titleLbl.Position = UDim2.new(0,10,0,0)
 	titleLbl.BackgroundTransparency = 1
 	titleLbl.Text = "QUICK TAB"
-	titleLbl.TextColor3 = Color3.fromRGB(255, 180, 80)
+	titleLbl.TextColor3 = Color3.fromRGB(255,180,80)
 	titleLbl.TextScaled = true
 	titleLbl.Font = Enum.Font.GothamBold
 	titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 	titleLbl.Parent = titleBar
 
 	local cogBtn = Instance.new("TextButton")
-	cogBtn.Size = UDim2.new(0, 24, 0, 24)
-	cogBtn.Position = UDim2.new(1, -52, 0, 2)
-	cogBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+	cogBtn.Size = UDim2.new(0,24,0,24)
+	cogBtn.Position = UDim2.new(1,-52,0,2)
+	cogBtn.BackgroundColor3 = Color3.fromRGB(40,40,60)
 	cogBtn.Text = "⚙"
-	cogBtn.TextColor3 = Color3.fromRGB(180, 180, 220)
+	cogBtn.TextColor3 = Color3.fromRGB(180,180,220)
 	cogBtn.TextScaled = true
 	cogBtn.Font = Enum.Font.GothamBold
 	cogBtn.BorderSizePixel = 0
@@ -528,9 +752,9 @@ local function createQuickTab()
 	end)
 
 	local closeBtn = Instance.new("TextButton")
-	closeBtn.Size = UDim2.new(0, 24, 0, 24)
-	closeBtn.Position = UDim2.new(1, -26, 0, 2)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+	closeBtn.Size = UDim2.new(0,24,0,24)
+	closeBtn.Position = UDim2.new(1,-26,0,2)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(180,40,40)
 	closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
 	closeBtn.TextScaled = true
@@ -550,13 +774,51 @@ local function createQuickTab()
 	local innerSw = guiWidth - 16
 	local yOff = 34
 
+	local botSelectFrame = Instance.new("Frame")
+	botSelectFrame.Size = UDim2.new(0, innerSw, 0, 24)
+	botSelectFrame.Position = UDim2.new(0, 8, 0, yOff)
+	botSelectFrame.BackgroundTransparency = 1
+	botSelectFrame.Parent = frame
+
+	local botLabel = Instance.new("TextLabel")
+	botLabel.Size = UDim2.new(0, 40, 1, 0)
+	botLabel.BackgroundTransparency = 1
+	botLabel.Text = "Bot:"
+	botLabel.TextColor3 = Color3.fromRGB(150,150,180)
+	botLabel.TextScaled = true
+	botLabel.Font = Enum.Font.Gotham
+	botLabel.TextXAlignment = Enum.TextXAlignment.Left
+	botLabel.Parent = botSelectFrame
+
+	local botBtnW = math.floor((innerSw - 44) / math.max(#bots, 1))
+	for i, bot in ipairs(bots) do
+		local bb = Instance.new("TextButton")
+		bb.Size = UDim2.new(0, math.min(botBtnW, 60), 1, 0)
+		bb.Position = UDim2.new(0, 42 + (i-1) * (math.min(botBtnW,60)+3), 0, 0)
+		bb.BackgroundColor3 = (i == activeBotIndex) and Color3.fromRGB(30,100,50) or Color3.fromRGB(35,35,55)
+		bb.Text = bot.nick ~= "" and bot.nick or ("B"..i)
+		bb.TextColor3 = Color3.fromRGB(220,220,255)
+		bb.TextScaled = true
+		bb.Font = Enum.Font.Gotham
+		bb.BorderSizePixel = 0
+		bb.Parent = botSelectFrame
+		local bbc = Instance.new("UICorner") bbc.CornerRadius = UDim.new(0,4) bbc.Parent = bb
+		bb.MouseButton1Click:Connect(function()
+			activeBotIndex = i
+			saveBots()
+			updateStatusDot()
+			createQuickTab()
+		end)
+	end
+	yOff = yOff + 28
+
 	local argInput = Instance.new("TextBox")
 	argInput.Size = UDim2.new(0, innerSw, 0, 22)
 	argInput.Position = UDim2.new(0, 8, 0, yOff)
-	argInput.BackgroundColor3 = Color3.fromRGB(20, 20, 32)
-	argInput.TextColor3 = Color3.fromRGB(220, 220, 255)
+	argInput.BackgroundColor3 = Color3.fromRGB(20,20,32)
+	argInput.TextColor3 = Color3.fromRGB(220,220,255)
 	argInput.PlaceholderText = "argument / name / text..."
-	argInput.PlaceholderColor3 = Color3.fromRGB(80, 80, 110)
+	argInput.PlaceholderColor3 = Color3.fromRGB(80,80,110)
 	argInput.Text = ""
 	argInput.TextScaled = true
 	argInput.Font = Enum.Font.Gotham
@@ -565,74 +827,6 @@ local function createQuickTab()
 	argInput.Parent = frame
 	local aic = Instance.new("UICorner") aic.CornerRadius = UDim.new(0,5) aic.Parent = argInput
 	local ais = Instance.new("UIStroke") ais.Color = Color3.fromRGB(60,60,100) ais.Thickness = 1 ais.Parent = argInput
-	yOff = yOff + 26
-
-	local hw2 = math.floor(innerSw/2) - 2
-
-	local speedInput = Instance.new("TextBox")
-	speedInput.Size = UDim2.new(0, hw2, 0, 22)
-	speedInput.Position = UDim2.new(0, 8, 0, yOff)
-	speedInput.BackgroundColor3 = Color3.fromRGB(20, 20, 32)
-	speedInput.TextColor3 = Color3.fromRGB(220, 220, 255)
-	speedInput.PlaceholderText = "speed..."
-	speedInput.PlaceholderColor3 = Color3.fromRGB(80, 80, 110)
-	speedInput.Text = ""
-	speedInput.TextScaled = true
-	speedInput.Font = Enum.Font.Gotham
-	speedInput.BorderSizePixel = 0
-	speedInput.ClearTextOnFocus = false
-	speedInput.Parent = frame
-	local sic = Instance.new("UICorner") sic.CornerRadius = UDim.new(0,5) sic.Parent = speedInput
-
-	local speedSendBtn = Instance.new("TextButton")
-	speedSendBtn.Size = UDim2.new(0, hw2, 0, 22)
-	speedSendBtn.Position = UDim2.new(0, 8+hw2+4, 0, yOff)
-	speedSendBtn.BackgroundColor3 = Color3.fromRGB(40, 80, 40)
-	speedSendBtn.Text = "Set Speed"
-	speedSendBtn.TextColor3 = Color3.fromRGB(255,255,255)
-	speedSendBtn.TextScaled = true
-	speedSendBtn.Font = Enum.Font.GothamBold
-	speedSendBtn.BorderSizePixel = 0
-	speedSendBtn.Parent = frame
-	local ssbc = Instance.new("UICorner") ssbc.CornerRadius = UDim.new(0,5) ssbc.Parent = speedSendBtn
-	speedSendBtn.MouseButton1Click:Connect(function()
-		local v = tonumber(speedInput.Text)
-		if v then sendCommand(".speed " .. v) sendWhisper("Speed: " .. v)
-		else sendWhisper("Enter a valid number!") end
-	end)
-	yOff = yOff + 26
-
-	local jumpInput = Instance.new("TextBox")
-	jumpInput.Size = UDim2.new(0, hw2, 0, 22)
-	jumpInput.Position = UDim2.new(0, 8, 0, yOff)
-	jumpInput.BackgroundColor3 = Color3.fromRGB(20, 20, 32)
-	jumpInput.TextColor3 = Color3.fromRGB(220, 220, 255)
-	jumpInput.PlaceholderText = "jump power..."
-	jumpInput.PlaceholderColor3 = Color3.fromRGB(80, 80, 110)
-	jumpInput.Text = ""
-	jumpInput.TextScaled = true
-	jumpInput.Font = Enum.Font.Gotham
-	jumpInput.BorderSizePixel = 0
-	jumpInput.ClearTextOnFocus = false
-	jumpInput.Parent = frame
-	local jic = Instance.new("UICorner") jic.CornerRadius = UDim.new(0,5) jic.Parent = jumpInput
-
-	local jumpSendBtn = Instance.new("TextButton")
-	jumpSendBtn.Size = UDim2.new(0, hw2, 0, 22)
-	jumpSendBtn.Position = UDim2.new(0, 8+hw2+4, 0, yOff)
-	jumpSendBtn.BackgroundColor3 = Color3.fromRGB(40, 60, 100)
-	jumpSendBtn.Text = "Set Jump"
-	jumpSendBtn.TextColor3 = Color3.fromRGB(255,255,255)
-	jumpSendBtn.TextScaled = true
-	jumpSendBtn.Font = Enum.Font.GothamBold
-	jumpSendBtn.BorderSizePixel = 0
-	jumpSendBtn.Parent = frame
-	local jsbc = Instance.new("UICorner") jsbc.CornerRadius = UDim.new(0,5) jsbc.Parent = jumpSendBtn
-	jumpSendBtn.MouseButton1Click:Connect(function()
-		local v = tonumber(jumpInput.Text)
-		if v then sendCommand(".jumppower " .. v) sendWhisper("JumpPower: " .. v)
-		else sendWhisper("Enter a valid number!") end
-	end)
 	yOff = yOff + 26
 
 	local stepFrame = Instance.new("Frame")
@@ -691,18 +885,14 @@ local function createQuickTab()
 	stopLoopBtn.Size = UDim2.new(0, 64, 1, 0)
 	stopLoopBtn.Position = UDim2.new(1, -64, 0, 0)
 	stopLoopBtn.BackgroundColor3 = Color3.fromRGB(140,40,40)
-	stopLoopBtn.Text = "Stop Loop"
+	stopLoopBtn.Text = "Unloop"
 	stopLoopBtn.TextColor3 = Color3.fromRGB(255,255,255)
 	stopLoopBtn.TextScaled = true
 	stopLoopBtn.Font = Enum.Font.Gotham
 	stopLoopBtn.BorderSizePixel = 0
 	stopLoopBtn.Parent = loopFrame
 	local slc = Instance.new("UICorner") slc.CornerRadius = UDim.new(0,4) slc.Parent = stopLoopBtn
-	stopLoopBtn.MouseButton1Click:Connect(function()
-		stopLoop()
-		loopLabel.Text = "⟳ No loop"
-		loopLabel.TextColor3 = Color3.fromRGB(120,120,150)
-	end)
+	stopLoopBtn.MouseButton1Click:Connect(function() stopLoop() end)
 	yOff = yOff + 24
 
 	local divider = Instance.new("Frame")
@@ -794,15 +984,8 @@ local function createQuickTab()
 					full = data.base .. " " .. arg
 				end
 				if full == "" then return end
-				if loopCmd then
-					stopLoop()
-					loopLabel.Text = "⟳ No loop"
-					loopLabel.TextColor3 = Color3.fromRGB(120,120,150)
-				else
-					startLoop(full)
-					loopLabel.Text = "⟳ " .. full
-					loopLabel.TextColor3 = Color3.fromRGB(255,120,120)
-				end
+				if loopCmd then stopLoop()
+				else startLoop(full) end
 			end)
 		end
 	end
@@ -810,13 +993,13 @@ local function createQuickTab()
 	quickTabGui = screenGui
 	quickTabVisible = true
 
-	if robotName ~= "" then
-		sendWhisper("Loaded robot: " .. robotName)
-	end
+	local rn = getRobotName()
+	sendWhisper("Ready. Active: " .. (getActiveBot().nick ~= "" and getActiveBot().nick or (rn ~= "" and rn or "not set")))
 end
 
 localPlayer.Chatted:Connect(function(message)
-	local lower = message:lower()
+	local parsed = parsePrefix(message)
+	local lower = parsed:lower()
 	if lower == ".quicktab" then
 		if quickTabVisible then
 			if settingsGui then settingsGui:Destroy() settingsGui = nil end
@@ -827,6 +1010,12 @@ localPlayer.Chatted:Connect(function(message)
 		else
 			createQuickTab()
 		end
+	elseif lower:sub(1,5) == ".all " then
+		local cmd = parsed:sub(6)
+		if cmd ~= "" then
+			sendCommandToAll(cmd)
+			sendWhisper("Broadcast: " .. cmd)
+		end
 	elseif lower == ".commands" then
 		for _, data in ipairs(COMMANDS) do
 			sendWhisper(data.label)
@@ -834,4 +1023,4 @@ localPlayer.Chatted:Connect(function(message)
 	end
 end)
 
-sendWhisper("Operator ready. Type .quicktab | Robot: " .. (robotName ~= "" and robotName or "not set"))
+sendWhisper("Operator ready. .quicktab to open | Bots: " .. #bots .. " | Active: " .. (getActiveBot().nick ~= "" and getActiveBot().nick or (getRobotName() ~= "" and getRobotName() or "not set")))
