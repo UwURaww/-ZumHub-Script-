@@ -77,6 +77,12 @@ local function findPlayer(name)
 	return nil
 end
 
+local function parseCommand(raw)
+	local s = raw:gsub("^%s+", ""):gsub("%s+$", "")
+	if s:sub(1,2) == ". " then s = "." .. s:sub(3) end
+	return s
+end
+
 local function lockControl(enabled)
 	controlLocked = enabled
 	local ok, PlayerModule = pcall(function()
@@ -426,23 +432,12 @@ local function setSize(scale)
 	if not char then return end
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if not hum then return end
-	hum.BodyDepthScale.Value = scale
-	hum.BodyHeightScale.Value = scale
-	hum.BodyWidthScale.Value = scale
-	hum.HeadScale.Value = scale
-end
-
-local function dance(style)
-	local general = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
-	if general then general:SendAsync("/e dance" .. (style or "")) end
-end
-
-local function savePosition()
-	local char = localPlayer.Character
-	if not char then return nil end
-	local root = char:FindFirstChild("HumanoidRootPart")
-	if root then return root.CFrame end
-	return nil
+	pcall(function()
+		hum.BodyDepthScale.Value = scale
+		hum.BodyHeightScale.Value = scale
+		hum.BodyWidthScale.Value = scale
+		hum.HeadScale.Value = scale
+	end)
 end
 
 local savedPosition = nil
@@ -455,31 +450,56 @@ end
 
 local processCommand
 
-local function startLoop(cmd, interval)
+local function startLoop(cmdToLoop, interval)
 	stopLoop()
-	loopCmd = cmd
-	local iv = interval or 1
+	loopCmd = cmdToLoop
+	local iv = math.max(interval or 1, 0.5)
 	loopConnection = RunService.Heartbeat:Connect(function()
 		local now = tick()
 		if now - lastLoopSent >= iv then
 			lastLoopSent = now
-			processCommand("." .. cmd, OPERATOR)
+			processCommand(cmdToLoop, OPERATOR)
 		end
 	end)
-	sendWhisper("Looping: " .. cmd .. " every " .. iv .. "s")
+	sendWhisper("Looping: " .. cmdToLoop .. " every " .. iv .. "s")
 end
+
+local ALIASES = {
+	spd = "speed", sp = "speed",
+	jp = "jumppower", jmp = "jumppower",
+	fw = "forward", bk = "back", bw = "back",
+	lt = "left", rt = "right",
+	tl = "turnleft", tr = "turnright",
+	flw = "follow", gt = "goto",
+	inv = "invisible", gm = "godmode",
+	nc = "noclip", frz = "freeze",
+	ufrz = "unfreeze", rst = "reset",
+	lk = "lookat", ltp = "looptp",
+	mir = "mirror", lck = "lockcontrol",
+	sav = "savepos", lod = "loadpos",
+	trp = "transparency", sz = "size",
+	ul = "unloop", ls = "loopstop",
+	grv = "gravity", goff = "gravityoff",
+	grst = "gravityreset", fl = "float",
+	bh = "bighead", cr = "crouch",
+	orb = "orbit", ptr = "patrol",
+}
 
 processCommand = function(message, speaker)
 	if not isOperator(speaker) then return end
 
 	if controlLocked then
-		local cleaned2 = message
+		local cleaned2 = parseCommand(message)
 		if cleaned2:lower():sub(1,3) == "/w " then
 			local s = cleaned2:find(" ", 4)
 			if s then cleaned2 = cleaned2:sub(s+1) end
 		end
+		cleaned2 = parseCommand(cleaned2)
 		local firstWord = cleaned2:match("%.(%S+)")
-		if firstWord and firstWord:lower() ~= "lockcontrol" then return end
+		if firstWord then
+			local resolved = ALIASES[firstWord:lower()] or firstWord:lower()
+			if resolved ~= "lockcontrol" and resolved ~= "lck" then return end
+		end
 	end
 
 	local cleaned = message
@@ -488,13 +508,15 @@ processCommand = function(message, speaker)
 		if spaceAfterName then cleaned = cleaned:sub(spaceAfterName+1) end
 	end
 
+	cleaned = parseCommand(cleaned)
 	if cleaned:sub(1,1) ~= "." then return end
 
 	local args = {}
 	for word in cleaned:sub(2):gmatch("%S+") do table.insert(args, word) end
 
-	local cmd = args[1] and args[1]:lower()
-	if not cmd then return end
+	local rawCmd = args[1] and args[1]:lower()
+	if not rawCmd then return end
+	local cmd = ALIASES[rawCmd] or rawCmd
 	table.remove(args, 1)
 	local rest = table.concat(args, " ")
 
@@ -518,28 +540,42 @@ processCommand = function(message, speaker)
 		if char then local hum = char:FindFirstChildOfClass("Humanoid") if hum then hum.Sit = false end end
 	elseif cmd == "emote" or cmd == "e" then
 		if rest ~= "" then doEmote(rest) end
+	elseif cmd == "wave" then doEmote("wave")
+	elseif cmd == "laugh" then doEmote("laugh")
+	elseif cmd == "cheer" then doEmote("cheer")
+	elseif cmd == "point" then doEmote("point")
+	elseif cmd == "dance" then doEmote("dance")
+	elseif cmd == "dance2" then doEmote("dance2")
+	elseif cmd == "dance3" then doEmote("dance3")
 	elseif cmd == "emotes" then
 		local rig = getCharacterRig()
 		if rig == "R6" then sendWhisper("R6: wave laugh dance dance2 dance3 cheer point")
 		else sendWhisper("R15: any ugc emote you own") end
 	elseif cmd == "speed" then
 		local num = tonumber(args[1]) if num then setSpeed(num) end
-	elseif cmd == "jump" then
-		doJump()
+	elseif cmd == "jump" then doJump()
 	elseif cmd == "jumppower" then
 		local num = tonumber(args[1]) if num then setJump(num) end
 	elseif cmd == "noclip" then
 		if rest == "on" then setNoclip(true) elseif rest == "off" then setNoclip(false) end
-	elseif cmd == "freeze" then
-		freezePlayer(true)
-	elseif cmd == "unfreeze" then
-		freezePlayer(false)
+	elseif cmd == "freeze" then freezePlayer(true)
+	elseif cmd == "unfreeze" then freezePlayer(false)
 	elseif cmd == "tp" then
 		if args[1] and not tonumber(args[1]) then
 			tpToPlayer(rest)
 		elseif args[1] and args[2] and args[3] then
 			local x,y,z = tonumber(args[1]),tonumber(args[2]),tonumber(args[3])
 			if x and y and z then tpToCoords(x,y,z) end
+		end
+	elseif cmd == "tpme" then
+		local operator = findPlayer(OPERATOR)
+		if operator and operator.Character then
+			local opRoot = operator.Character:FindFirstChild("HumanoidRootPart")
+			local myChar = localPlayer.Character
+			if myChar and opRoot then
+				local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+				if myRoot then myRoot.CFrame = opRoot.CFrame + Vector3.new(3,0,0) end
+			end
 		end
 	elseif cmd == "invisible" then
 		if rest == "on" then setInvisibleFE(true) elseif rest == "off" then setInvisibleFE(false) end
@@ -548,18 +584,12 @@ processCommand = function(message, speaker)
 	elseif cmd == "reset" then
 		local char = localPlayer.Character
 		if char then local hum = char:FindFirstChildOfClass("Humanoid") if hum then hum.Health = 0 end end
-	elseif cmd == "forward" or cmd == "fw" then
-		moveDirection("forward", tonumber(args[1]) or 10)
-	elseif cmd == "back" or cmd == "bw" then
-		moveDirection("back", tonumber(args[1]) or 10)
-	elseif cmd == "left" or cmd == "l" then
-		moveDirection("left", tonumber(args[1]) or 10)
-	elseif cmd == "right" or cmd == "r" then
-		moveDirection("right", tonumber(args[1]) or 10)
-	elseif cmd == "turnleft" or cmd == "tl" then
-		turnDirection("left", tonumber(args[1]) or 90)
-	elseif cmd == "turnright" or cmd == "tr" then
-		turnDirection("right", tonumber(args[1]) or 90)
+	elseif cmd == "forward" then moveDirection("forward", tonumber(args[1]) or 10)
+	elseif cmd == "back" then moveDirection("back", tonumber(args[1]) or 10)
+	elseif cmd == "left" then moveDirection("left", tonumber(args[1]) or 10)
+	elseif cmd == "right" then moveDirection("right", tonumber(args[1]) or 10)
+	elseif cmd == "turnleft" then turnDirection("left", tonumber(args[1]) or 90)
+	elseif cmd == "turnright" then turnDirection("right", tonumber(args[1]) or 90)
 	elseif cmd == "lookat" then
 		if rest ~= "" then lookAt(rest) end
 	elseif cmd == "spin" then
@@ -583,11 +613,13 @@ processCommand = function(message, speaker)
 		local num = tonumber(args[1])
 		if num then setTransparency(math.clamp(num, 0, 1)) end
 	elseif cmd == "size" then
-		local num = tonumber(args[1])
-		if num then setSize(num) end
+		local num = tonumber(args[1]) if num then setSize(num) end
 	elseif cmd == "savepos" then
-		savedPosition = savePosition()
-		if savedPosition then sendWhisper("Position saved.") end
+		local char = localPlayer.Character
+		if char then
+			local root = char:FindFirstChild("HumanoidRootPart")
+			if root then savedPosition = root.CFrame sendWhisper("Position saved.") end
+		end
 	elseif cmd == "loadpos" then
 		if savedPosition then
 			local char = localPlayer.Character
@@ -598,23 +630,12 @@ processCommand = function(message, speaker)
 		else
 			sendWhisper("No saved position.")
 		end
-	elseif cmd == "tpme" then
-		local operator = findPlayer(OPERATOR)
-		if operator and operator.Character then
-			local opRoot = operator.Character:FindFirstChild("HumanoidRootPart")
-			local myChar = localPlayer.Character
-			if myChar and opRoot then
-				local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-				if myRoot then myRoot.CFrame = opRoot.CFrame + Vector3.new(3, 0, 0) end
-			end
-		end
 	elseif cmd == "orbit" then
 		stopFollowing()
 		local target = findPlayer(rest ~= "" and rest or OPERATOR)
 		if not target then return end
 		following = target
 		local angle = 0
-		local radius = 8
 		followConnection = RunService.Heartbeat:Connect(function()
 			if not following or not following.Character then stopFollowing() return end
 			local targetChar = following.Character
@@ -625,20 +646,10 @@ processCommand = function(message, speaker)
 			local myHum = myChar:FindFirstChildOfClass("Humanoid")
 			if not targetRoot or not myRoot or not myHum then return end
 			angle = angle + 0.02
-			local x = targetRoot.Position.X + math.cos(angle) * radius
-			local z = targetRoot.Position.Z + math.sin(angle) * radius
+			local x = targetRoot.Position.X + math.cos(angle) * 8
+			local z = targetRoot.Position.Z + math.sin(angle) * 8
 			myHum:MoveTo(Vector3.new(x, targetRoot.Position.Y, z))
 		end)
-	elseif cmd == "dance" then
-		dance(args[1] or "")
-	elseif cmd == "wave" then
-		doEmote("wave")
-	elseif cmd == "laugh" then
-		doEmote("laugh")
-	elseif cmd == "cheer" then
-		doEmote("cheer")
-	elseif cmd == "point" then
-		doEmote("point")
 	elseif cmd == "health" then
 		local char = localPlayer.Character
 		if char then
@@ -651,7 +662,7 @@ processCommand = function(message, speaker)
 			local root = char:FindFirstChild("HumanoidRootPart")
 			if root then
 				local p = root.Position
-				sendWhisper("Pos: " .. math.floor(p.X) .. ", " .. math.floor(p.Y) .. ", " .. math.floor(p.Z))
+				sendWhisper("Pos: " .. math.floor(p.X) .. " " .. math.floor(p.Y) .. " " .. math.floor(p.Z))
 			end
 		end
 	elseif cmd == "rig" then
@@ -660,19 +671,21 @@ processCommand = function(message, speaker)
 		if rest ~= "" then
 			local parts = {}
 			for w in rest:gmatch("%S+") do table.insert(parts, w) end
-			local interval = tonumber(parts[#parts])
-			local cmdPart
-			if interval then
+			local interval = 1
+			local lastNum = tonumber(parts[#parts])
+			if lastNum and #parts > 1 then
+				interval = math.max(lastNum, 0.5)
 				table.remove(parts, #parts)
-				cmdPart = table.concat(parts, " ")
-			else
-				interval = 1
-				cmdPart = rest
 			end
-			if cmdPart ~= "" then startLoop(cmdPart, interval) end
+			local loopTarget = table.concat(parts, " ")
+			if loopTarget:sub(1,1) ~= "." then loopTarget = "." .. loopTarget end
+			loopTarget = parseCommand(loopTarget)
+			startLoop(loopTarget, interval)
 		end
-	elseif cmd == "loopstop" then
+	elseif cmd == "unloop" or cmd == "loopstop" then
 		stopLoop()
+	elseif cmd == "aliases" then
+		sendWhisper("spd=speed sp=speed jp=jumppower jmp=jumppower fw=forward bk/bw=back lt=left rt=right tl=turnleft tr=turnright flw=follow gt=goto inv=invisible gm=godmode nc=noclip frz=freeze ufrz=unfreeze rst=reset lk=lookat ltp=looptp mir=mirror lck=lockcontrol sav=savepos lod=loadpos trp=transparency sz=size ul=unloop grv=gravity goff=gravityoff grst=gravityreset fl=float bh=bighead cr=crouch orb=orbit ptr=patrol")
 	elseif cmd == "status" then
 		sendWhisper(
 			(following and "Following." or "Idle.") .. " " ..
@@ -681,7 +694,7 @@ processCommand = function(message, speaker)
 			(mirrorEnabled and "Mirroring." or "No mirror.")
 		)
 	elseif cmd == "commands" then
-		sendWhisper(".follow .goto .patrol .looptp .orbit .stop .say .sit .stand .e .wave .laugh .cheer .point .dance .speed .jump .jumppower .noclip .freeze .unfreeze .tp .tpme .invisible .godmode .reset .fw .bw .l .r .tl .tr .lookat .spin .fling .gravity .gravityoff .gravityreset .float .bighead .crouch .lockcontrol .mirror .transparency .size .savepos .loadpos .health .pos .rig .loop .loopstop .status")
+		sendWhisper(".follow .goto .patrol .orbit .stop .say .sit .stand .e .wave .laugh .cheer .point .dance .spd .jp .jump .nc .frz .ufrz .tp .tpme .inv .gm .rst .fw .bk .lt .rt .tl .tr .lk .spin .fling .grv .goff .grst .fl .bh .cr .lck .mir .trp .sz .sav .lod .health .pos .rig .loop .ul .status .aliases")
 	end
 end
 
