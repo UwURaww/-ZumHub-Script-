@@ -20,7 +20,7 @@ local guiWidth = 280
 local guiHeight = 440
 local statusDotRef = nil
 
-local SAVE_KEY = "RobotOperatorName"
+local SAVE_KEY = "botaktak_ireng"
 
 local function saveRobotName(name)
 	pcall(function()
