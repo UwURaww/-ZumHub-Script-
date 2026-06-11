@@ -6,6 +6,7 @@ local localPlayer = Players.LocalPlayer
 
 local OPERATORS = {}
 local pendingRequests = {}
+local connectionLocked = false
 
 local following = nil
 local followConnection = nil
@@ -20,25 +21,13 @@ local controlLocked = false
 local mirrorConnection = nil
 local mirrorEnabled = false
 local antiAFKConnection = nil
-local chatSpamConnection = nil
 local glitchConnection = nil
 local savedPosition = nil
 local savedPosition2 = nil
 local savedPosition3 = nil
-local connectionLocked = false
 
-local OPS_SAVE_KEY = "RobotSavedOperators_v2"
+local OPS_SAVE_KEY = "RobotSavedOperators_v3"
 
-
-local function showConnectionRequest(requesterName)
-	if connectionLocked then
-		local general = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
-		if general then general:SendAsync("/w " .. requesterName .. " .cc denied") end
-		notify("Locked", "Connection locked. " .. requesterName .. " was auto-denied.", 3, Color3.fromRGB(255,80,80))
-		return
-	end
-	-- rest of function stays same
-	
 local function saveOperators()
 	localPlayer:SetAttribute(OPS_SAVE_KEY, table.concat(OPERATORS, ";;"))
 end
@@ -137,6 +126,14 @@ local function notify(title, message, duration, color)
 end
 
 local function showConnectionRequest(requesterName)
+	if connectionLocked then
+		local general = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
+		if general then task.wait(0.2) general:SendAsync("/w " .. requesterName .. " .cc denied") end
+		notify("Locked", requesterName .. " was auto-denied.", 3, Color3.fromRGB(255, 80, 80))
+		pendingRequests[requesterName] = nil
+		return
+	end
+
 	local sg = Instance.new("ScreenGui")
 	sg.Name = "RobotConnReq"
 	sg.ResetOnSpawn = false
@@ -265,7 +262,10 @@ local function lockControl(enabled)
 	local char = localPlayer.Character
 	if char then
 		local hum = char:FindFirstChildOfClass("Humanoid")
-		if hum then hum.WalkSpeed = enabled and 0 or speedValue hum.JumpPower = enabled and 0 or jumpValue end
+		if hum then
+			hum.WalkSpeed = enabled and 0 or speedValue
+			hum.JumpPower = enabled and 0 or jumpValue
+		end
 	end
 	notify(enabled and "Control Locked" or "Control Unlocked", enabled and "Movement disabled." or "Movement enabled.", 2, enabled and Color3.fromRGB(255,80,80) or Color3.fromRGB(80,255,120))
 end
@@ -602,15 +602,8 @@ end
 local function setWalkAnim(enabled)
 	local char = localPlayer.Character
 	if not char then return end
-	local hum = char:FindFirstChildOfClass("Humanoid")
-	if not hum then return end
-	if not enabled then
-		local animate = char:FindFirstChild("Animate")
-		if animate then animate.Disabled = true end
-	else
-		local animate = char:FindFirstChild("Animate")
-		if animate then animate.Disabled = false end
-	end
+	local animate = char:FindFirstChild("Animate")
+	if animate then animate.Disabled = not enabled end
 end
 
 local function glitchEffect(enabled)
@@ -639,11 +632,8 @@ local function ragdoll(enabled)
 	if not char then return end
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if not hum then return end
-	if enabled then
-		hum:ChangeState(Enum.HumanoidStateType.Ragdoll)
-	else
-		hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-	end
+	if enabled then hum:ChangeState(Enum.HumanoidStateType.Ragdoll)
+	else hum:ChangeState(Enum.HumanoidStateType.GettingUp) end
 end
 
 local function setFOV(amount)
@@ -656,7 +646,7 @@ local function headless(enabled)
 	local head = char:FindFirstChild("Head")
 	if head then head.Transparency = enabled and 1 or 0 end
 	local hrp = char:FindFirstChild("HumanoidRootPart")
-	if hrp and enabled then hrp.Transparency = 1 end
+	if hrp then hrp.Transparency = enabled and 1 or 0 end
 end
 
 local function savePos(slot)
@@ -667,12 +657,12 @@ local function savePos(slot)
 	if slot == 1 then savedPosition = root.CFrame
 	elseif slot == 2 then savedPosition2 = root.CFrame
 	elseif slot == 3 then savedPosition3 = root.CFrame end
-	notify("Saved", "Position " .. slot .. " saved.", 2, Color3.fromRGB(100,200,255))
+	notify("Saved", "Position slot " .. slot .. " saved.", 2, Color3.fromRGB(100,200,255))
 end
 
 local function loadPos(slot)
 	local cf = slot == 1 and savedPosition or slot == 2 and savedPosition2 or savedPosition3
-	if not cf then notify("Load Pos", "No saved position " .. slot, 2, Color3.fromRGB(255,180,80)) return end
+	if not cf then notify("Load Pos", "No saved position in slot " .. slot, 2, Color3.fromRGB(255,180,80)) return end
 	local char = localPlayer.Character
 	if char then
 		local root = char:FindFirstChild("HumanoidRootPart")
@@ -713,7 +703,7 @@ local ALIASES = {
 	grv="gravity", goff="gravityoff", grst="gravityreset",
 	fl="float", bh="bighead", cr="crouch", orb="orbit", ptr="patrol",
 	hlth="health", hd="headless", rg="ragdoll", gl="glitch",
-	aafk="antiafk", wa="walkanim",
+	aafk="antiafk", wa="walkanim", lockconn="lcc",
 }
 
 processCommand = function(message, speaker)
@@ -729,7 +719,7 @@ processCommand = function(message, speaker)
 		local firstWord = cleaned2:match("%.(%S+)")
 		if firstWord then
 			local resolved = ALIASES[firstWord:lower()] or firstWord:lower()
-			if resolved ~= "lockcontrol" and resolved ~= "lck" then return end
+			if resolved ~= "lockcontrol" and resolved ~= "lck" and resolved ~= "lcc" and resolved ~= "lockconn" then return end
 		end
 	end
 
@@ -830,12 +820,8 @@ processCommand = function(message, speaker)
 	elseif cmd == "mirror" then if rest=="on" then startMirror() elseif rest=="off" then stopMirror() end
 	elseif cmd == "transparency" then local num = tonumber(args[1]) if num then setTransparency(math.clamp(num,0,1)) end
 	elseif cmd == "size" then local num = tonumber(args[1]) if num then setSize(num) notify("Size", tostring(num), 2, Color3.fromRGB(200,200,255)) end
-	elseif cmd == "savepos" then
-		local slot = tonumber(args[1]) or 1
-		savePos(slot)
-	elseif cmd == "loadpos" then
-		local slot = tonumber(args[1]) or 1
-		loadPos(slot)
+	elseif cmd == "savepos" then savePos(tonumber(args[1]) or 1)
+	elseif cmd == "loadpos" then loadPos(tonumber(args[1]) or 1)
 	elseif cmd == "orbit" then
 		stopFollowing()
 		local target = rest ~= "" and findPlayer(rest) or (OPERATORS[1] and findPlayer(OPERATORS[1]))
@@ -871,6 +857,16 @@ processCommand = function(message, speaker)
 	elseif cmd == "ragdoll" then if rest=="on" then ragdoll(true) elseif rest=="off" then ragdoll(false) end
 	elseif cmd == "headless" then if rest=="on" then headless(true) elseif rest=="off" then headless(false) end
 	elseif cmd == "fov" then local num = tonumber(args[1]) if num then setFOV(num) notify("FOV", tostring(num), 2, Color3.fromRGB(200,200,255)) end
+	elseif cmd == "lcc" then
+		if rest == "on" then
+			connectionLocked = true
+			notify("Conn Lock", "No new operators can connect.", 3, Color3.fromRGB(255,80,80))
+		elseif rest == "off" then
+			connectionLocked = false
+			notify("Conn Lock", "Open for new operators.", 3, Color3.fromRGB(80,255,120))
+		else
+			notify("Conn Lock", connectionLocked and "Currently LOCKED" or "Currently OPEN", 3, Color3.fromRGB(255,180,80))
+		end
 	elseif cmd == "removeop" then
 		if rest ~= "" then
 			for i, op in ipairs(OPERATORS) do
@@ -897,9 +893,14 @@ processCommand = function(message, speaker)
 		end
 	elseif cmd == "unloop" or cmd == "loopstop" then stopLoop()
 	elseif cmd == "status" then
-		notify("Status", (following and "Following" or "Idle").." | "..(loopCmd and "Loop: "..loopCmd or "No loop").." | "..(controlLocked and "LOCKED" or "Free"), 4, Color3.fromRGB(200,200,255))
+		notify("Status",
+			(following and "Following" or "Idle") .. " | " ..
+			(loopCmd and "Loop: "..loopCmd or "No loop") .. " | " ..
+			(controlLocked and "Ctrl LOCKED" or "Ctrl Free") .. " | " ..
+			(connectionLocked and "Conn LOCKED" or "Conn Open"),
+			5, Color3.fromRGB(200,200,255))
 	elseif cmd == "aliases" then
-		notify("Aliases", "spd jp fw bk lt rt tl tr flw gt inv gm nc frz ufrz rst lk ltp mir lck sav lod trp sz ul grv fl bh cr orb ptr hlth hd rg gl aafk", 6, Color3.fromRGB(200,200,255))
+		notify("Aliases", "spd jp fw bk lt rt tl tr flw gt inv gm nc frz ufrz rst lk ltp mir lck sav lod trp sz ul grv fl bh cr orb ptr hlth hd rg gl aafk wa lcc", 6, Color3.fromRGB(200,200,255))
 	end
 end
 
@@ -911,7 +912,6 @@ Players.PlayerAdded:Connect(function(player)
 			if s then cleaned = cleaned:sub(s+1) end
 		end
 		cleaned = parseCommand(cleaned)
-
 		if cleaned:lower():sub(1,2) == ".c" then
 			local parts = {}
 			for w in cleaned:sub(2):gmatch("%S+") do table.insert(parts, w) end
@@ -929,17 +929,6 @@ Players.PlayerAdded:Connect(function(player)
 				return
 			end
 		end
-					
-elseif cmd == "lcc" or cmd == "lockconn" then
-	if rest == "on" then
-		connectionLocked = true
-		notify("Connection Lock", "No new operators can connect.", 3, Color3.fromRGB(255,80,80))
-	elseif rest == "off" then
-		connectionLocked = false
-		notify("Connection Lock", "New operators can connect.", 3, Color3.fromRGB(80,255,120))
-					end
-				end
-				
 		processCommand(message, player.Name)
 	end)
 end)
@@ -952,7 +941,6 @@ for _, player in ipairs(Players:GetPlayers()) do
 			if s then cleaned = cleaned:sub(s+1) end
 		end
 		cleaned = parseCommand(cleaned)
-
 		if cleaned:lower():sub(1,2) == ".c" then
 			local parts = {}
 			for w in cleaned:sub(2):gmatch("%S+") do table.insert(parts, w) end
@@ -970,7 +958,6 @@ for _, player in ipairs(Players:GetPlayers()) do
 				return
 			end
 		end
-
 		processCommand(message, player.Name)
 	end)
 end
