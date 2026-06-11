@@ -323,6 +323,7 @@ end
 local toggleStates = {}
 
 local COMMANDS = {
+	{label="lockconn",toggle=true,on=".lcc on",off=".lcc off"},
 	{label=".follow me",cmd=".follow me"},
 	{label=".stop",cmd=".stop"},
 	{label=".sit",cmd=".sit"},
