@@ -24,9 +24,9 @@ local quickTabHidden = false
 local loopLabelRef = nil
 local hasSeenLanding = false
 
-local BOTS_SAVE_KEY = "RobotOperatorBots_v5"
-local ACTIVE_BOT_KEY = "RobotOperatorActive_v5"
-local LANDING_KEY = "RobotOperatorLandingSeen_v3"
+local BOTS_SAVE_KEY = "RobotOperatorBots_v6"
+local ACTIVE_BOT_KEY = "RobotOperatorActive_v6"
+local LANDING_KEY = "RobotOperatorLandingSeen_v4"
 
 local bots = {}
 local activeBotIndex = 1
@@ -175,13 +175,13 @@ local function showBotAcceptRequest(botName)
 	msgLbl.Font = Enum.Font.Gotham msgLbl.TextXAlignment = Enum.TextXAlignment.Left msgLbl.Parent = frame
 
 	local acceptBtn = Instance.new("TextButton")
-	acceptBtn.Size = UDim2.new(0,110,0,28) acceptBtn.Position = UDim2.new(0,12,0,58)
+	acceptBtn.Size = UDim2.new(0,110,0,28) acceptBtn.Position = UDim2.new(0,12,0,60)
 	acceptBtn.BackgroundColor3 = Color3.fromRGB(30,120,50) acceptBtn.Text = "Add as Bot"
 	acceptBtn.TextColor3 = Color3.fromRGB(255,255,255) acceptBtn.TextScaled = true acceptBtn.Font = Enum.Font.GothamBold acceptBtn.BorderSizePixel = 0 acceptBtn.Parent = frame
 	local abc = Instance.new("UICorner") abc.CornerRadius = UDim.new(0,5) abc.Parent = acceptBtn
 
 	local denyBtn = Instance.new("TextButton")
-	denyBtn.Size = UDim2.new(0,80,0,28) denyBtn.Position = UDim2.new(0,130,0,58)
+	denyBtn.Size = UDim2.new(0,80,0,28) denyBtn.Position = UDim2.new(0,130,0,60)
 	denyBtn.BackgroundColor3 = Color3.fromRGB(140,30,30) denyBtn.Text = "Deny"
 	denyBtn.TextColor3 = Color3.fromRGB(255,255,255) denyBtn.TextScaled = true denyBtn.Font = Enum.Font.GothamBold denyBtn.BorderSizePixel = 0 denyBtn.Parent = frame
 	local dbc = Instance.new("UICorner") dbc.CornerRadius = UDim.new(0,5) dbc.Parent = denyBtn
@@ -323,7 +323,6 @@ end
 local toggleStates = {}
 
 local COMMANDS = {
-	{label="lockconn",toggle=true,on=".lcc on",off=".lcc off"},
 	{label=".follow me",cmd=".follow me"},
 	{label=".stop",cmd=".stop"},
 	{label=".sit",cmd=".sit"},
@@ -369,6 +368,7 @@ local COMMANDS = {
 	{label="ragdoll",toggle=true,on=".rg on",off=".rg off"},
 	{label="headless",toggle=true,on=".hd on",off=".hd off"},
 	{label="walkanim",toggle=true,on=".wa on",off=".wa off"},
+	{label="conn lock",toggle=true,on=".lcc on",off=".lcc off"},
 	{label=".fw [n]",cmd=nil,input=true,base=".fw"},
 	{label=".bk [n]",cmd=nil,input=true,base=".bk"},
 	{label=".lt [n]",cmd=nil,input=true,base=".lt"},
@@ -410,7 +410,9 @@ local function refreshBotsScroll()
 		rowFrame.BackgroundColor3 = (i==activeBotIndex) and Color3.fromRGB(30,60,30) or Color3.fromRGB(20,20,32)
 		rowFrame.BorderSizePixel = 0 rowFrame.Parent = botsScrollRef
 		local rc = Instance.new("UICorner") rc.CornerRadius = UDim.new(0,5) rc.Parent = rowFrame
-		if i == activeBotIndex then local rs = Instance.new("UIStroke") rs.Color = Color3.fromRGB(80,200,100) rs.Thickness = 1 rs.Parent = rowFrame end
+		if i == activeBotIndex then
+			local rs = Instance.new("UIStroke") rs.Color = Color3.fromRGB(80,200,100) rs.Thickness = 1 rs.Parent = rowFrame
+		end
 
 		local nickBox = Instance.new("TextBox")
 		nickBox.Size = UDim2.new(0,68,0,24) nickBox.Position = UDim2.new(0,4,0,4)
@@ -496,12 +498,10 @@ local function createLandingPage()
 	tokenFrame.BackgroundColor3 = Color3.fromRGB(16,16,26) tokenFrame.BorderSizePixel = 0 tokenFrame.Parent = panel
 	local tfc = Instance.new("UICorner") tfc.CornerRadius = UDim.new(0,7) tfc.Parent = tokenFrame
 	local tfs = Instance.new("UIStroke") tfs.Color = Color3.fromRGB(80,80,140) tfs.Thickness = 1 tfs.Parent = tokenFrame
-
 	local tokenTopLbl = Instance.new("TextLabel")
 	tokenTopLbl.Size = UDim2.new(1,-10,0,14) tokenTopLbl.Position = UDim2.new(0,10,0,3)
 	tokenTopLbl.BackgroundTransparency = 1 tokenTopLbl.Text = "Session ID  (local only)"
 	tokenTopLbl.TextColor3 = Color3.fromRGB(100,100,150) tokenTopLbl.TextScaled = true tokenTopLbl.Font = Enum.Font.Gotham tokenTopLbl.TextXAlignment = Enum.TextXAlignment.Left tokenTopLbl.Parent = tokenFrame
-
 	local tokenLbl = Instance.new("TextLabel")
 	tokenLbl.Size = UDim2.new(1,-10,0,18) tokenLbl.Position = UDim2.new(0,10,0,17)
 	tokenLbl.BackgroundTransparency = 1 tokenLbl.Text = localPlayer.Name .. "  /  " .. PLAYER_TOKEN
@@ -512,18 +512,17 @@ local function createLandingPage()
 	scroll.BackgroundTransparency = 1 scroll.BorderSizePixel = 0 scroll.ScrollBarThickness = 3
 	scroll.ScrollBarImageColor3 = Color3.fromRGB(255,180,80) scroll.CanvasSize = UDim2.new(0,0,0,0)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y scroll.Parent = panel
-
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.Padding = UDim.new(0,6) listLayout.SortOrder = Enum.SortOrder.LayoutOrder listLayout.Parent = scroll
 
 	local steps = {
 		{num="1",title="Run ROBOT script on bot account",body="Execute the ROBOT script on your alt account. It shows a notification when ready.",color=Color3.fromRGB(255,140,60)},
 		{num="2",title="Connect via .c BotUsername in chat",body="Type .c botname in chat. The bot gets a popup to accept. Once accepted you are connected.",color=Color3.fromRGB(100,200,100)},
-		{num="3",title="Or let bot request you",body="Bot types .c in chat. You get a popup to add them as your bot.",color=Color3.fromRGB(80,160,255)},
+		{num="3",title="Or let bot request you",body="Bot types .c in chat and you get a popup to add them as your bot.",color=Color3.fromRGB(80,160,255)},
 		{num="4",title="Open Quick Tab",body="Type .quicktab to open the control panel. Select active bot at the top then use buttons.",color=Color3.fromRGB(200,100,255)},
 		{num="5",title="Commands use . prefix",body="Type .follow me .sit .spd 30 etc. Both .cmd and . cmd with space both work.",color=Color3.fromRGB(255,180,80)},
-		{num="6",title="Loop a command",body="Right-click any button to loop it. Or type .loop .spd 60. Type .unloop to stop.",color=Color3.fromRGB(255,80,120)},
-		{num="7",title="Enable Whisper in Settings",body="Click the cog button in Quick Tab and enable Whisper. Commands go as private messages.",color=Color3.fromRGB(80,220,180)},
+		{num="6",title="Loop a command",body="Right-click any button to loop it. Or in Settings use Loop Command. Type .unloop to stop.",color=Color3.fromRGB(255,80,120)},
+		{num="7",title="Lock connection with .lcc on",body="Once connected type .lcc on to lock the bot so no new operators can connect to it.",color=Color3.fromRGB(80,220,180)},
 	}
 
 	for _, step in ipairs(steps) do
@@ -531,18 +530,15 @@ local function createLandingPage()
 		stepFrame.Size = UDim2.new(1,0,0,70) stepFrame.BackgroundColor3 = Color3.fromRGB(16,16,26) stepFrame.BorderSizePixel = 0 stepFrame.Parent = scroll
 		local sfc = Instance.new("UICorner") sfc.CornerRadius = UDim.new(0,7) sfc.Parent = stepFrame
 		local sfs = Instance.new("UIStroke") sfs.Color = step.color sfs.Thickness = 1 sfs.Transparency = 0.6 sfs.Parent = stepFrame
-
 		local numLbl = Instance.new("TextLabel")
 		numLbl.Size = UDim2.new(0,26,0,26) numLbl.Position = UDim2.new(0,8,0,8)
 		numLbl.BackgroundColor3 = step.color numLbl.BackgroundTransparency = 0.3
 		numLbl.Text = step.num numLbl.TextColor3 = Color3.fromRGB(255,255,255) numLbl.TextScaled = true numLbl.Font = Enum.Font.GothamBold numLbl.BorderSizePixel = 0 numLbl.Parent = stepFrame
 		local nlc = Instance.new("UICorner") nlc.CornerRadius = UDim.new(0,5) nlc.Parent = numLbl
-
 		local titleL = Instance.new("TextLabel")
 		titleL.Size = UDim2.new(1,-46,0,18) titleL.Position = UDim2.new(0,40,0,5)
 		titleL.BackgroundTransparency = 1 titleL.Text = step.title titleL.TextColor3 = step.color
 		titleL.TextScaled = true titleL.Font = Enum.Font.GothamBold titleL.TextXAlignment = Enum.TextXAlignment.Left titleL.Parent = stepFrame
-
 		local bodyL = Instance.new("TextLabel")
 		bodyL.Size = UDim2.new(1,-46,0,42) bodyL.Position = UDim2.new(0,40,0,24)
 		bodyL.BackgroundTransparency = 1 bodyL.Text = step.body bodyL.TextColor3 = Color3.fromRGB(160,160,190)
@@ -607,7 +603,6 @@ local function createSettingsGui()
 	scroll.BackgroundTransparency = 1 scroll.BorderSizePixel = 0 scroll.ScrollBarThickness = 3
 	scroll.ScrollBarImageColor3 = Color3.fromRGB(100,100,160) scroll.CanvasSize = UDim2.new(0,0,0,0)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y scroll.Parent = panel
-
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.Padding = UDim.new(0,6) listLayout.SortOrder = Enum.SortOrder.LayoutOrder listLayout.Parent = scroll
 	local lpad = Instance.new("UIPadding")
