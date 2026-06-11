@@ -25,9 +25,20 @@ local glitchConnection = nil
 local savedPosition = nil
 local savedPosition2 = nil
 local savedPosition3 = nil
+local connectionLocked = false
 
 local OPS_SAVE_KEY = "RobotSavedOperators_v2"
 
+
+local function showConnectionRequest(requesterName)
+	if connectionLocked then
+		local general = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
+		if general then general:SendAsync("/w " .. requesterName .. " .cc denied") end
+		notify("Locked", "Connection locked. " .. requesterName .. " was auto-denied.", 3, Color3.fromRGB(255,80,80))
+		return
+	end
+	-- rest of function stays same
+	
 local function saveOperators()
 	localPlayer:SetAttribute(OPS_SAVE_KEY, table.concat(OPERATORS, ";;"))
 end
@@ -918,7 +929,17 @@ Players.PlayerAdded:Connect(function(player)
 				return
 			end
 		end
-
+					
+elseif cmd == "lcc" or cmd == "lockconn" then
+	if rest == "on" then
+		connectionLocked = true
+		notify("Connection Lock", "No new operators can connect.", 3, Color3.fromRGB(255,80,80))
+	elseif rest == "off" then
+		connectionLocked = false
+		notify("Connection Lock", "New operators can connect.", 3, Color3.fromRGB(80,255,120))
+					end
+				end
+				
 		processCommand(message, player.Name)
 	end)
 end)
