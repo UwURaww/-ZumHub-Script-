@@ -5,7 +5,7 @@ local localPlayer = Players.LocalPlayer
 
 local quickTabGui = nil
 local settingsGui = nil
-local landingGui = nil
+local helpGui = nil
 local quickTabVisible = false
 local settingsVisible = false
 local viewConnection = nil
@@ -22,11 +22,10 @@ local guiHeight = 460
 local statusDotRef = nil
 local quickTabHidden = false
 local loopLabelRef = nil
-local hasSeenLanding = false
 
-local BOTS_SAVE_KEY = "RobotOperatorBots_v6"
-local ACTIVE_BOT_KEY = "RobotOperatorActive_v6"
-local LANDING_KEY = "RobotOperatorLandingSeen_v4"
+local BOTS_KEY = "RobotBots_v7"
+local ACTIVE_KEY = "RobotActive_v7"
+local SEEN_LANDING_KEY = "RobotSeenLanding_v5"
 
 local bots = {}
 local activeBotIndex = 1
@@ -34,28 +33,28 @@ local activeBotIndex = 1
 local function generateToken(name)
 	local chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 	local seed = 0
-	for i = 1, #name do seed = seed + string.byte(name,i) * i * 31 end
+	for i = 1, #name do seed = seed + string.byte(name,i)*i*31 end
 	math.randomseed(seed)
-	local result = ""
+	local r = ""
 	for s = 1, 3 do
-		for i = 1, 4 do result = result .. chars:sub(math.random(1,#chars),math.random(1,#chars)) end
-		if s < 3 then result = result .. "-" end
+		for i = 1, 4 do r = r..chars:sub(math.random(1,#chars),math.random(1,#chars)) end
+		if s < 3 then r = r.."-" end
 	end
-	return result
+	return r
 end
 
-local PLAYER_TOKEN = generateToken(localPlayer.Name .. localPlayer.UserId)
+local PLAYER_TOKEN = generateToken(localPlayer.Name..localPlayer.UserId)
 
 local function saveBots()
-	local encoded = {}
-	for i, bot in ipairs(bots) do encoded[i] = bot.name .. "|" .. bot.nick end
-	localPlayer:SetAttribute(BOTS_SAVE_KEY, table.concat(encoded, ";;"))
-	localPlayer:SetAttribute(ACTIVE_BOT_KEY, tostring(activeBotIndex))
+	local e = {}
+	for i, bot in ipairs(bots) do e[i] = bot.name.."|"..bot.nick end
+	localPlayer:SetAttribute(BOTS_KEY, table.concat(e,";;"))
+	localPlayer:SetAttribute(ACTIVE_KEY, tostring(activeBotIndex))
 end
 
 local function loadBots()
-	local raw = localPlayer:GetAttribute(BOTS_SAVE_KEY)
-	local activeRaw = localPlayer:GetAttribute(ACTIVE_BOT_KEY)
+	local raw = localPlayer:GetAttribute(BOTS_KEY)
+	local activeRaw = localPlayer:GetAttribute(ACTIVE_KEY)
 	bots = {}
 	if raw and raw ~= "" then
 		for _, entry in ipairs(raw:split(";;")) do
@@ -71,10 +70,11 @@ local function loadBots()
 end
 
 loadBots()
-hasSeenLanding = localPlayer:GetAttribute(LANDING_KEY) == true
+
+local hasSeenLanding = localPlayer:GetAttribute(SEEN_LANDING_KEY) == true
 
 local function getActiveBot() return bots[activeBotIndex] or bots[1] end
-local function getRobotName() local bot = getActiveBot() return bot and bot.name or "" end
+local function getRobotName() local b = getActiveBot() return b and b.name or "" end
 
 local notifQueue = {}
 local notifActive = false
@@ -85,142 +85,105 @@ local function processNotifQueue()
 	local data = table.remove(notifQueue, 1)
 
 	local sg = Instance.new("ScreenGui")
-	sg.Name = "OperatorNotif"
-	sg.ResetOnSpawn = false
-	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	sg.Parent = localPlayer.PlayerGui
+	sg.Name = "OpNotif" sg.ResetOnSpawn = false
+	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling sg.Parent = localPlayer.PlayerGui
 
 	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(0, 280, 0, 56)
-	frame.Position = UDim2.new(0, 16, 1, 80)
-	frame.BackgroundColor3 = Color3.fromRGB(12,12,20)
-	frame.BorderSizePixel = 0
-	frame.Parent = sg
-	local fc = Instance.new("UICorner") fc.CornerRadius = UDim.new(0,7) fc.Parent = frame
-	local fs = Instance.new("UIStroke") fs.Color = data.color or Color3.fromRGB(255,180,80) fs.Thickness = 1.5 fs.Parent = frame
-
+	frame.Size = UDim2.new(0,260,0,52) frame.Position = UDim2.new(0,16,1,80)
+	frame.BackgroundColor3 = Color3.fromRGB(12,12,20) frame.BorderSizePixel = 0 frame.Parent = sg
+	local fc = Instance.new("UICorner") fc.CornerRadius = UDim.new(0,6) fc.Parent = frame
+	local fs = Instance.new("UIStroke") fs.Color = data.color or Color3.fromRGB(255,180,80) fs.Thickness = 1.2 fs.Parent = frame
 	local accent = Instance.new("Frame")
-	accent.Size = UDim2.new(0,3,1,0)
-	accent.BackgroundColor3 = data.color or Color3.fromRGB(255,180,80)
-	accent.BorderSizePixel = 0
-	accent.Parent = frame
-	local ac = Instance.new("UICorner") ac.CornerRadius = UDim.new(0,7) ac.Parent = accent
+	accent.Size = UDim2.new(0,3,1,0) accent.BackgroundColor3 = data.color or Color3.fromRGB(255,180,80)
+	accent.BorderSizePixel = 0 accent.Parent = frame
+	local ac = Instance.new("UICorner") ac.CornerRadius = UDim.new(0,6) ac.Parent = accent
+	local tl = Instance.new("TextLabel")
+	tl.Size = UDim2.new(1,-18,0,18) tl.Position = UDim2.new(0,10,0,4) tl.BackgroundTransparency = 1
+	tl.Text = data.title tl.TextColor3 = data.color or Color3.fromRGB(255,180,80)
+	tl.TextScaled = true tl.Font = Enum.Font.GothamBold tl.TextXAlignment = Enum.TextXAlignment.Left tl.Parent = frame
+	local ml = Instance.new("TextLabel")
+	ml.Size = UDim2.new(1,-18,0,24) ml.Position = UDim2.new(0,10,0,22) ml.BackgroundTransparency = 1
+	ml.Text = data.message ml.TextColor3 = Color3.fromRGB(170,170,200)
+	ml.TextScaled = true ml.Font = Enum.Font.Gotham ml.TextXAlignment = Enum.TextXAlignment.Left ml.TextWrapped = true ml.Parent = frame
 
-	local titleLbl = Instance.new("TextLabel")
-	titleLbl.Size = UDim2.new(1,-20,0,20) titleLbl.Position = UDim2.new(0,12,0,4)
-	titleLbl.BackgroundTransparency = 1 titleLbl.Text = data.title
-	titleLbl.TextColor3 = data.color or Color3.fromRGB(255,180,80) titleLbl.TextScaled = true
-	titleLbl.Font = Enum.Font.GothamBold titleLbl.TextXAlignment = Enum.TextXAlignment.Left titleLbl.Parent = frame
-
-	local msgLbl = Instance.new("TextLabel")
-	msgLbl.Size = UDim2.new(1,-20,0,26) msgLbl.Position = UDim2.new(0,12,0,24)
-	msgLbl.BackgroundTransparency = 1 msgLbl.Text = data.message
-	msgLbl.TextColor3 = Color3.fromRGB(180,180,210) msgLbl.TextScaled = true
-	msgLbl.Font = Enum.Font.Gotham msgLbl.TextXAlignment = Enum.TextXAlignment.Left msgLbl.TextWrapped = true msgLbl.Parent = frame
-
-	local tweenIn = TweenService:Create(frame, TweenInfo.new(0.3,Enum.EasingStyle.Quart,Enum.EasingDirection.Out), {Position=UDim2.new(0,16,1,-72)})
-	tweenIn:Play()
-
-	task.delay(data.duration or 3, function()
-		local tweenOut = TweenService:Create(frame, TweenInfo.new(0.25,Enum.EasingStyle.Quart,Enum.EasingDirection.In), {Position=UDim2.new(0,16,1,80)})
-		tweenOut:Play()
-		tweenOut.Completed:Wait()
-		sg:Destroy()
-		notifActive = false
-		processNotifQueue()
+	TweenService:Create(frame,TweenInfo.new(0.25,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Position=UDim2.new(0,16,1,-68)}):Play()
+	task.delay(data.duration or 2.5, function()
+		local t = TweenService:Create(frame,TweenInfo.new(0.2,Enum.EasingStyle.Quart,Enum.EasingDirection.In),{Position=UDim2.new(0,16,1,80)})
+		t:Play() t.Completed:Wait() sg:Destroy()
+		notifActive = false processNotifQueue()
 	end)
 end
 
 local function notify(title, message, duration, color)
-	table.insert(notifQueue, {title=title, message=message, duration=duration or 3, color=color})
+	table.insert(notifQueue, {title=title,message=message,duration=duration or 2.5,color=color})
 	processNotifQueue()
 end
 
 local function showBotAcceptRequest(botName)
 	local sg = Instance.new("ScreenGui")
-	sg.Name = "BotConnReq"
-	sg.ResetOnSpawn = false
-	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	sg.Parent = localPlayer.PlayerGui
+	sg.Name = "BotConnReq" sg.ResetOnSpawn = false
+	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling sg.Parent = localPlayer.PlayerGui
 
 	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(0,300,0,96)
-	frame.Position = UDim2.new(0,16,1,120)
-	frame.BackgroundColor3 = Color3.fromRGB(12,12,20)
-	frame.BorderSizePixel = 0
-	frame.Parent = sg
+	frame.Size = UDim2.new(0,290,0,92) frame.Position = UDim2.new(0,16,1,120)
+	frame.BackgroundColor3 = Color3.fromRGB(12,12,20) frame.BorderSizePixel = 0 frame.Parent = sg
 	local fc = Instance.new("UICorner") fc.CornerRadius = UDim.new(0,7) fc.Parent = frame
 	local fs = Instance.new("UIStroke") fs.Color = Color3.fromRGB(100,200,255) fs.Thickness = 1.5 fs.Parent = frame
-
 	local accent = Instance.new("Frame")
-	accent.Size = UDim2.new(0,3,1,0)
-	accent.BackgroundColor3 = Color3.fromRGB(100,200,255)
-	accent.BorderSizePixel = 0
-	accent.Parent = frame
+	accent.Size = UDim2.new(0,3,1,0) accent.BackgroundColor3 = Color3.fromRGB(100,200,255)
+	accent.BorderSizePixel = 0 accent.Parent = frame
 	local ac = Instance.new("UICorner") ac.CornerRadius = UDim.new(0,7) ac.Parent = accent
 
-	local tweenIn = TweenService:Create(frame, TweenInfo.new(0.3,Enum.EasingStyle.Quart,Enum.EasingDirection.Out), {Position=UDim2.new(0,16,1,-112)})
-	tweenIn:Play()
+	TweenService:Create(frame,TweenInfo.new(0.25,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Position=UDim2.new(0,16,1,-108)}):Play()
 
-	local titleLbl = Instance.new("TextLabel")
-	titleLbl.Size = UDim2.new(1,-16,0,20) titleLbl.Position = UDim2.new(0,12,0,4)
-	titleLbl.BackgroundTransparency = 1 titleLbl.Text = "Bot Request"
-	titleLbl.TextColor3 = Color3.fromRGB(100,200,255) titleLbl.TextScaled = true
-	titleLbl.Font = Enum.Font.GothamBold titleLbl.TextXAlignment = Enum.TextXAlignment.Left titleLbl.Parent = frame
-
-	local msgLbl = Instance.new("TextLabel")
-	msgLbl.Size = UDim2.new(1,-16,0,20) msgLbl.Position = UDim2.new(0,12,0,24)
-	msgLbl.BackgroundTransparency = 1 msgLbl.Text = botName .. " wants you as operator"
-	msgLbl.TextColor3 = Color3.fromRGB(200,200,230) msgLbl.TextScaled = true
-	msgLbl.Font = Enum.Font.Gotham msgLbl.TextXAlignment = Enum.TextXAlignment.Left msgLbl.Parent = frame
+	local tl = Instance.new("TextLabel")
+	tl.Size = UDim2.new(1,-14,0,18) tl.Position = UDim2.new(0,10,0,4) tl.BackgroundTransparency = 1
+	tl.Text = "Bot Request" tl.TextColor3 = Color3.fromRGB(100,200,255) tl.TextScaled = true
+	tl.Font = Enum.Font.GothamBold tl.TextXAlignment = Enum.TextXAlignment.Left tl.Parent = frame
+	local ml = Instance.new("TextLabel")
+	ml.Size = UDim2.new(1,-14,0,18) ml.Position = UDim2.new(0,10,0,24) ml.BackgroundTransparency = 1
+	ml.Text = botName.." wants you as operator" ml.TextColor3 = Color3.fromRGB(200,200,230)
+	ml.TextScaled = true ml.Font = Enum.Font.Gotham ml.TextXAlignment = Enum.TextXAlignment.Left ml.Parent = frame
 
 	local acceptBtn = Instance.new("TextButton")
-	acceptBtn.Size = UDim2.new(0,110,0,28) acceptBtn.Position = UDim2.new(0,12,0,60)
+	acceptBtn.Size = UDim2.new(0,108,0,26) acceptBtn.Position = UDim2.new(0,10,0,58)
 	acceptBtn.BackgroundColor3 = Color3.fromRGB(30,120,50) acceptBtn.Text = "Add as Bot"
 	acceptBtn.TextColor3 = Color3.fromRGB(255,255,255) acceptBtn.TextScaled = true acceptBtn.Font = Enum.Font.GothamBold acceptBtn.BorderSizePixel = 0 acceptBtn.Parent = frame
 	local abc = Instance.new("UICorner") abc.CornerRadius = UDim.new(0,5) abc.Parent = acceptBtn
-
 	local denyBtn = Instance.new("TextButton")
-	denyBtn.Size = UDim2.new(0,80,0,28) denyBtn.Position = UDim2.new(0,130,0,60)
+	denyBtn.Size = UDim2.new(0,80,0,26) denyBtn.Position = UDim2.new(0,124,0,58)
 	denyBtn.BackgroundColor3 = Color3.fromRGB(140,30,30) denyBtn.Text = "Deny"
 	denyBtn.TextColor3 = Color3.fromRGB(255,255,255) denyBtn.TextScaled = true denyBtn.Font = Enum.Font.GothamBold denyBtn.BorderSizePixel = 0 denyBtn.Parent = frame
 	local dbc = Instance.new("UICorner") dbc.CornerRadius = UDim.new(0,5) dbc.Parent = denyBtn
 
 	local function dismiss()
-		local tweenOut = TweenService:Create(frame, TweenInfo.new(0.25,Enum.EasingStyle.Quart,Enum.EasingDirection.In), {Position=UDim2.new(0,16,1,120)})
-		tweenOut:Play()
-		tweenOut.Completed:Wait()
-		sg:Destroy()
+		local t = TweenService:Create(frame,TweenInfo.new(0.2,Enum.EasingStyle.Quart,Enum.EasingDirection.In),{Position=UDim2.new(0,16,1,120)})
+		t:Play() t.Completed:Wait() sg:Destroy()
 	end
 
 	acceptBtn.MouseButton1Click:Connect(function()
 		local emptySlot = nil
-		for i, bot in ipairs(bots) do if bot.name == "" then emptySlot = i break end end
-		if emptySlot then
-			bots[emptySlot].name = botName bots[emptySlot].nick = botName
-		else
-			table.insert(bots, {name=botName, nick=botName})
-		end
+		for i, bot in ipairs(bots) do if bot.name=="" then emptySlot=i break end end
+		if emptySlot then bots[emptySlot].name=botName bots[emptySlot].nick=botName
+		else table.insert(bots,{name=botName,nick=botName}) end
 		saveBots()
-		notify("Bot Added", botName .. " added.", 3, Color3.fromRGB(80,255,120))
-		local channel = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
-		if channel then task.wait(0.2) channel:SendAsync("/w " .. botName .. " .cc accepted") end
+		notify("Bot Added",botName.." added.",3,Color3.fromRGB(80,255,120))
+		local ch = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
+		if ch then task.wait(0.2) ch:SendAsync("/w "..botName.." .cc accepted") end
 		if quickTabGui then quickTabGui:Destroy() createQuickTab() end
 		dismiss()
 	end)
-
 	denyBtn.MouseButton1Click:Connect(function()
-		local channel = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
-		if channel then task.wait(0.2) channel:SendAsync("/w " .. botName .. " .cc denied") end
+		local ch = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
+		if ch then task.wait(0.2) ch:SendAsync("/w "..botName.." .cc denied") end
 		dismiss()
 	end)
-
 	task.delay(20, function() if sg.Parent then dismiss() end end)
 end
 
 local function parsePrefix(cmd)
 	local s = cmd:gsub("^%s+",""):gsub("%s+$","")
-	if s:sub(1,2) == ". " then s = "." .. s:sub(3) end
+	if s:sub(1,2) == ". " then s = "."..s:sub(3) end
 	return s
 end
 
@@ -228,95 +191,84 @@ local function sendCommandToBot(cmd, botName)
 	local now = tick()
 	if now - lastSent < COOLDOWN then return end
 	lastSent = now
-	local channel = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
-	if not channel then return end
+	local ch = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
+	if not ch then return end
 	local cleaned = parsePrefix(cmd)
-	if useWhisper and botName ~= "" then
-		channel:SendAsync("/w " .. botName .. " " .. cleaned)
-	else
-		channel:SendAsync(cleaned)
-	end
+	if useWhisper and botName ~= "" then ch:SendAsync("/w "..botName.." "..cleaned)
+	else ch:SendAsync(cleaned) end
 end
 
-local function sendCommand(cmd)
-	sendCommandToBot(cmd, getRobotName())
-end
+local function sendCommand(cmd) sendCommandToBot(cmd, getRobotName()) end
 
 local function sendCommandToAll(cmd)
 	for _, bot in ipairs(bots) do
 		if bot.name ~= "" then
-			task.spawn(function()
-				task.wait(0.1)
-				sendCommandToBot(cmd, bot.name)
-			end)
+			task.spawn(function() task.wait(0.1) sendCommandToBot(cmd, bot.name) end)
 		end
 	end
 end
 
 local function startLoop(cmd)
-	if loopConnection then loopConnection:Disconnect() loopConnection = nil end
+	if loopConnection then loopConnection:Disconnect() loopConnection=nil end
 	loopCmd = cmd
 	loopConnection = RunService.Heartbeat:Connect(function()
 		local now = tick()
 		if now - lastSent >= COOLDOWN then
 			lastSent = now
-			local channel = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
-			if not channel then return end
+			local ch = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
+			if not ch then return end
 			local cleaned = parsePrefix(loopCmd)
 			local rn = getRobotName()
-			if useWhisper and rn ~= "" then
-				channel:SendAsync("/w " .. rn .. " " .. cleaned)
-			else
-				channel:SendAsync(cleaned)
-			end
+			if useWhisper and rn ~= "" then ch:SendAsync("/w "..rn.." "..cleaned)
+			else ch:SendAsync(cleaned) end
 		end
 	end)
-	if loopLabelRef then loopLabelRef.Text = "Loop: " .. cmd loopLabelRef.TextColor3 = Color3.fromRGB(255,120,120) end
-	notify("Loop", cmd, 3, Color3.fromRGB(255,120,120))
+	if loopLabelRef then loopLabelRef.Text = "Loop: "..cmd loopLabelRef.TextColor3 = Color3.fromRGB(255,120,120) end
+	notify("Loop",cmd,2,Color3.fromRGB(255,120,120))
 end
 
 local function stopLoop()
-	if loopConnection then loopConnection:Disconnect() loopConnection = nil end
+	if loopConnection then loopConnection:Disconnect() loopConnection=nil end
 	loopCmd = nil
 	if loopLabelRef then loopLabelRef.Text = "No loop" loopLabelRef.TextColor3 = Color3.fromRGB(120,120,150) end
-	notify("Loop", "Stopped.", 2, Color3.fromRGB(200,200,255))
+	notify("Loop","Stopped.",2,Color3.fromRGB(200,200,255))
 end
 
 local function startView()
 	local rn = getRobotName()
-	if rn == "" then notify("View", "Set robot name first.", 2, Color3.fromRGB(255,180,80)) return end
+	if rn=="" then notify("View","Set robot name first.",2,Color3.fromRGB(255,180,80)) return end
 	local robot = Players:FindFirstChild(rn)
-	if not robot or not robot.Character then notify("View", "Robot not found.", 2, Color3.fromRGB(255,80,80)) return end
-	local cam = game:GetService("Workspace").CurrentCamera
+	if not robot or not robot.Character then notify("View","Robot not found.",2,Color3.fromRGB(255,80,80)) return end
+	local cam = workspace.CurrentCamera
 	savedCameraMode = cam.CameraType
 	cam.CameraType = Enum.CameraType.Scriptable
 	viewingRobot = true
-	notify("View", "Viewing " .. rn, 2, Color3.fromRGB(100,180,255))
+	notify("View","Viewing "..rn,2,Color3.fromRGB(100,180,255))
 	viewConnection = RunService.Heartbeat:Connect(function()
 		if not viewingRobot then return end
 		local r = Players:FindFirstChild(rn)
 		if not r or not r.Character then return end
-		local rp = r.Character:FindFirstChild("HumanoidRootPart")
-		if not rp then return end
-		cam.CFrame = CFrame.new(rp.Position + Vector3.new(0,8,14), rp.Position)
+		local rp = r.Character:FindFirstChild("HumanoidRootPart") if not rp then return end
+		cam.CFrame = CFrame.new(rp.Position+Vector3.new(0,8,14), rp.Position)
 	end)
 end
 
 local function stopView()
 	viewingRobot = false
-	if viewConnection then viewConnection:Disconnect() viewConnection = nil end
-	local cam = game:GetService("Workspace").CurrentCamera
+	if viewConnection then viewConnection:Disconnect() viewConnection=nil end
+	local cam = workspace.CurrentCamera
 	cam.CameraType = savedCameraMode or Enum.CameraType.Custom
-	notify("View", "Stopped.", 2, Color3.fromRGB(100,180,255))
+	notify("View","Stopped.",2,Color3.fromRGB(100,180,255))
 end
 
 local function updateStatusDot()
 	if not statusDotRef then return end
 	local rn = getRobotName()
-	local robot = rn ~= "" and Players:FindFirstChild(rn)
-	local connected = robot ~= nil and robot.Character ~= nil
+	local robot = rn~="" and Players:FindFirstChild(rn)
+	local connected = robot~=nil and robot.Character~=nil
 	statusDotRef.BackgroundColor3 = connected and Color3.fromRGB(20,80,30) or Color3.fromRGB(80,20,20)
-	statusDotRef.Text = connected and ((getActiveBot().nick ~= "" and getActiveBot().nick or rn) .. " - ONLINE") or ((getActiveBot().nick ~= "" and getActiveBot().nick or "Bot") .. " - OFFLINE")
+	local nick = getActiveBot().nick
+	statusDotRef.Text = connected and ((nick~="" and nick or rn).." - ONLINE") or ((nick~="" and nick or "Bot").." - OFFLINE")
 	statusDotRef.TextColor3 = connected and Color3.fromRGB(80,255,120) or Color3.fromRGB(255,80,80)
 end
 
@@ -405,174 +357,203 @@ local function refreshBotsScroll()
 		if not child:IsA("UIListLayout") and not child:IsA("UIPadding") then child:Destroy() end
 	end
 	for i, bot in ipairs(bots) do
-		local rowFrame = Instance.new("Frame")
-		rowFrame.Size = UDim2.new(1,-8,0,32)
-		rowFrame.BackgroundColor3 = (i==activeBotIndex) and Color3.fromRGB(30,60,30) or Color3.fromRGB(20,20,32)
-		rowFrame.BorderSizePixel = 0 rowFrame.Parent = botsScrollRef
-		local rc = Instance.new("UICorner") rc.CornerRadius = UDim.new(0,5) rc.Parent = rowFrame
-		if i == activeBotIndex then
-			local rs = Instance.new("UIStroke") rs.Color = Color3.fromRGB(80,200,100) rs.Thickness = 1 rs.Parent = rowFrame
-		end
+		local row = Instance.new("Frame")
+		row.Size = UDim2.new(1,-8,0,32)
+		row.BackgroundColor3 = (i==activeBotIndex) and Color3.fromRGB(30,60,30) or Color3.fromRGB(20,20,32)
+		row.BorderSizePixel = 0 row.Parent = botsScrollRef
+		local rc = Instance.new("UICorner") rc.CornerRadius = UDim.new(0,5) rc.Parent = row
+		if i==activeBotIndex then local rs=Instance.new("UIStroke") rs.Color=Color3.fromRGB(80,200,100) rs.Thickness=1 rs.Parent=row end
 
 		local nickBox = Instance.new("TextBox")
 		nickBox.Size = UDim2.new(0,68,0,24) nickBox.Position = UDim2.new(0,4,0,4)
 		nickBox.BackgroundColor3 = Color3.fromRGB(18,18,28) nickBox.TextColor3 = Color3.fromRGB(200,200,240)
 		nickBox.PlaceholderText = "nick" nickBox.PlaceholderColor3 = Color3.fromRGB(80,80,110)
-		nickBox.Text = bot.nick nickBox.TextScaled = true nickBox.Font = Enum.Font.Gotham nickBox.BorderSizePixel = 0 nickBox.ClearTextOnFocus = false nickBox.Parent = rowFrame
-		local nc2 = Instance.new("UICorner") nc2.CornerRadius = UDim.new(0,4) nc2.Parent = nickBox
-		nickBox:GetPropertyChangedSignal("Text"):Connect(function() bots[i].nick = nickBox.Text saveBots() end)
+		nickBox.Text = bot.nick nickBox.TextScaled = true nickBox.Font = Enum.Font.Gotham nickBox.BorderSizePixel = 0 nickBox.ClearTextOnFocus = false nickBox.Parent = row
+		local nc = Instance.new("UICorner") nc.CornerRadius = UDim.new(0,4) nc.Parent = nickBox
+		nickBox:GetPropertyChangedSignal("Text"):Connect(function() bots[i].nick=nickBox.Text saveBots() end)
 
 		local nameBox = Instance.new("TextBox")
 		nameBox.Size = UDim2.new(0,88,0,24) nameBox.Position = UDim2.new(0,76,0,4)
 		nameBox.BackgroundColor3 = Color3.fromRGB(18,18,28) nameBox.TextColor3 = Color3.fromRGB(220,220,255)
 		nameBox.PlaceholderText = "username" nameBox.PlaceholderColor3 = Color3.fromRGB(80,80,110)
-		nameBox.Text = bot.name nameBox.TextScaled = true nameBox.Font = Enum.Font.Gotham nameBox.BorderSizePixel = 0 nameBox.ClearTextOnFocus = false nameBox.Parent = rowFrame
-		local nbc = Instance.new("UICorner") nbc.CornerRadius = UDim.new(0,4) nbc.Parent = nameBox
-		nameBox:GetPropertyChangedSignal("Text"):Connect(function() bots[i].name = nameBox.Text saveBots() updateStatusDot() end)
+		nameBox.Text = bot.name nameBox.TextScaled = true nameBox.Font = Enum.Font.Gotham nameBox.BorderSizePixel = 0 nameBox.ClearTextOnFocus = false nameBox.Parent = row
+		local nb = Instance.new("UICorner") nb.CornerRadius = UDim.new(0,4) nb.Parent = nameBox
+		nameBox:GetPropertyChangedSignal("Text"):Connect(function() bots[i].name=nameBox.Text saveBots() updateStatusDot() end)
 
-		local selectBtn = Instance.new("TextButton")
-		selectBtn.Size = UDim2.new(0,34,0,24) selectBtn.Position = UDim2.new(0,168,0,4)
-		selectBtn.BackgroundColor3 = (i==activeBotIndex) and Color3.fromRGB(30,100,50) or Color3.fromRGB(40,40,60)
-		selectBtn.Text = i==activeBotIndex and "ON" or "USE"
-		selectBtn.TextColor3 = Color3.fromRGB(255,255,255) selectBtn.TextScaled = true selectBtn.Font = Enum.Font.GothamBold selectBtn.BorderSizePixel = 0 selectBtn.Parent = rowFrame
-		local sbc = Instance.new("UICorner") sbc.CornerRadius = UDim.new(0,4) sbc.Parent = selectBtn
-		selectBtn.MouseButton1Click:Connect(function()
-			activeBotIndex = i saveBots() updateStatusDot() refreshBotsScroll()
-			notify("Active Bot", bot.nick ~= "" and bot.nick or bot.name, 2, Color3.fromRGB(80,200,100))
+		local useBtn = Instance.new("TextButton")
+		useBtn.Size = UDim2.new(0,34,0,24) useBtn.Position = UDim2.new(0,168,0,4)
+		useBtn.BackgroundColor3 = (i==activeBotIndex) and Color3.fromRGB(30,100,50) or Color3.fromRGB(40,40,60)
+		useBtn.Text = i==activeBotIndex and "ON" or "USE"
+		useBtn.TextColor3 = Color3.fromRGB(255,255,255) useBtn.TextScaled = true useBtn.Font = Enum.Font.GothamBold useBtn.BorderSizePixel = 0 useBtn.Parent = row
+		local ub = Instance.new("UICorner") ub.CornerRadius = UDim.new(0,4) ub.Parent = useBtn
+		useBtn.MouseButton1Click:Connect(function()
+			activeBotIndex=i saveBots() updateStatusDot() refreshBotsScroll()
+			notify("Active Bot",bot.nick~="" and bot.nick or bot.name,2,Color3.fromRGB(80,200,100))
 		end)
 
 		local connBtn = Instance.new("TextButton")
 		connBtn.Size = UDim2.new(0,24,0,24) connBtn.Position = UDim2.new(0,206,0,4)
 		connBtn.BackgroundColor3 = Color3.fromRGB(30,60,100) connBtn.Text = "C"
-		connBtn.TextColor3 = Color3.fromRGB(255,255,255) connBtn.TextScaled = true connBtn.Font = Enum.Font.GothamBold connBtn.BorderSizePixel = 0 connBtn.Parent = rowFrame
-		local cbc = Instance.new("UICorner") cbc.CornerRadius = UDim.new(0,4) cbc.Parent = connBtn
+		connBtn.TextColor3 = Color3.fromRGB(255,255,255) connBtn.TextScaled = true connBtn.Font = Enum.Font.GothamBold connBtn.BorderSizePixel = 0 connBtn.Parent = row
+		local cb = Instance.new("UICorner") cb.CornerRadius = UDim.new(0,4) cb.Parent = connBtn
 		connBtn.MouseButton1Click:Connect(function()
-			if bot.name ~= "" then
-				local channel = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
-				if channel then
-					if useWhisper then channel:SendAsync("/w " .. bot.name .. " .c")
-					else channel:SendAsync(".c") end
-					notify("Connecting", "Request sent to " .. bot.name, 2, Color3.fromRGB(100,180,255))
+			if bot.name~="" then
+				local ch = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
+				if ch then
+					if useWhisper then ch:SendAsync("/w "..bot.name.." .c") else ch:SendAsync(".c") end
+					notify("Connecting","Sent to "..bot.name,2,Color3.fromRGB(100,180,255))
 				end
-			else
-				notify("Error", "Enter bot username first.", 2, Color3.fromRGB(255,100,100))
-			end
+			else notify("Error","Enter username first.",2,Color3.fromRGB(255,100,100)) end
 		end)
 	end
 end
 
 local createQuickTab
 
-local function createLandingPage()
-	if landingGui then landingGui:Destroy() end
+local function createHelpPage()
+	if helpGui then helpGui:Destroy() helpGui=nil end
 
 	local sg = Instance.new("ScreenGui")
-	sg.Name = "RobotLanding"
-	sg.ResetOnSpawn = false
-	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	sg.Parent = localPlayer.PlayerGui
+	sg.Name = "RobotHelp" sg.ResetOnSpawn = false
+	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling sg.Parent = localPlayer.PlayerGui
 
 	local overlay = Instance.new("Frame")
-	overlay.Size = UDim2.new(1,0,1,0)
-	overlay.BackgroundColor3 = Color3.fromRGB(0,0,0)
-	overlay.BackgroundTransparency = 0.4
-	overlay.BorderSizePixel = 0
-	overlay.Parent = sg
+	overlay.Size = UDim2.new(1,0,1,0) overlay.BackgroundColor3 = Color3.fromRGB(0,0,0)
+	overlay.BackgroundTransparency = 0.5 overlay.BorderSizePixel = 0 overlay.Parent = sg
 
 	local panel = Instance.new("Frame")
-	panel.Size = UDim2.new(0,420,0,560)
-	panel.Position = UDim2.new(0.5,-210,0.5,-280)
-	panel.BackgroundColor3 = Color3.fromRGB(10,10,16)
-	panel.BorderSizePixel = 0
-	panel.Parent = sg
-	local pc = Instance.new("UICorner") pc.CornerRadius = UDim.new(0,14) pc.Parent = panel
+	panel.Size = UDim2.new(0,500,0,600)
+	panel.Position = UDim2.new(0.5,-250,0.5,-300)
+	panel.BackgroundColor3 = Color3.fromRGB(10,10,16) panel.BorderSizePixel = 0 panel.Parent = sg
+	local pc = Instance.new("UICorner") pc.CornerRadius = UDim.new(0,12) pc.Parent = panel
 	local ps = Instance.new("UIStroke") ps.Color = Color3.fromRGB(255,180,80) ps.Thickness = 2 ps.Parent = panel
 
-	local titleLbl = Instance.new("TextLabel")
-	titleLbl.Size = UDim2.new(1,0,0,50) titleLbl.Position = UDim2.new(0,0,0,14)
-	titleLbl.BackgroundTransparency = 1 titleLbl.Text = "ROBOT CONTROL"
-	titleLbl.TextColor3 = Color3.fromRGB(255,180,80) titleLbl.TextScaled = true titleLbl.Font = Enum.Font.GothamBold titleLbl.Parent = panel
+	local titleBar = Instance.new("Frame")
+	titleBar.Size = UDim2.new(1,0,0,44) titleBar.BackgroundColor3 = Color3.fromRGB(16,14,22)
+	titleBar.BorderSizePixel = 0 titleBar.Parent = panel
+	local tbc = Instance.new("UICorner") tbc.CornerRadius = UDim.new(0,12) tbc.Parent = titleBar
 
-	local tokenFrame = Instance.new("Frame")
-	tokenFrame.Size = UDim2.new(1,-40,0,36) tokenFrame.Position = UDim2.new(0,20,0,66)
-	tokenFrame.BackgroundColor3 = Color3.fromRGB(16,16,26) tokenFrame.BorderSizePixel = 0 tokenFrame.Parent = panel
-	local tfc = Instance.new("UICorner") tfc.CornerRadius = UDim.new(0,7) tfc.Parent = tokenFrame
-	local tfs = Instance.new("UIStroke") tfs.Color = Color3.fromRGB(80,80,140) tfs.Thickness = 1 tfs.Parent = tokenFrame
-	local tokenTopLbl = Instance.new("TextLabel")
-	tokenTopLbl.Size = UDim2.new(1,-10,0,14) tokenTopLbl.Position = UDim2.new(0,10,0,3)
-	tokenTopLbl.BackgroundTransparency = 1 tokenTopLbl.Text = "Session ID  (local only)"
-	tokenTopLbl.TextColor3 = Color3.fromRGB(100,100,150) tokenTopLbl.TextScaled = true tokenTopLbl.Font = Enum.Font.Gotham tokenTopLbl.TextXAlignment = Enum.TextXAlignment.Left tokenTopLbl.Parent = tokenFrame
+	local titleLbl = Instance.new("TextLabel")
+	titleLbl.Size = UDim2.new(1,-50,1,0) titleLbl.Position = UDim2.new(0,16,0,0)
+	titleLbl.BackgroundTransparency = 1 titleLbl.Text = "ROBOT CONTROL  /  Help & Reference"
+	titleLbl.TextColor3 = Color3.fromRGB(255,180,80) titleLbl.TextScaled = true titleLbl.Font = Enum.Font.GothamBold
+	titleLbl.TextXAlignment = Enum.TextXAlignment.Left titleLbl.Parent = titleBar
+
+	local closeBtn = Instance.new("TextButton")
+	closeBtn.Size = UDim2.new(0,28,0,28) closeBtn.Position = UDim2.new(1,-34,0,8)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(180,40,40) closeBtn.Text = "X"
+	closeBtn.TextColor3 = Color3.fromRGB(255,255,255) closeBtn.TextScaled = true closeBtn.Font = Enum.Font.GothamBold closeBtn.BorderSizePixel = 0 closeBtn.Parent = titleBar
+	local cbc = Instance.new("UICorner") cbc.CornerRadius = UDim.new(0,5) cbc.Parent = closeBtn
+	closeBtn.MouseButton1Click:Connect(function()
+		sg:Destroy() helpGui = nil
+	end)
+
+	local tokenBar = Instance.new("Frame")
+	tokenBar.Size = UDim2.new(1,-32,0,28) tokenBar.Position = UDim2.new(0,16,0,50)
+	tokenBar.BackgroundColor3 = Color3.fromRGB(16,14,26) tokenBar.BorderSizePixel = 0 tokenBar.Parent = panel
+	local tbc2 = Instance.new("UICorner") tbc2.CornerRadius = UDim.new(0,5) tbc2.Parent = tokenBar
 	local tokenLbl = Instance.new("TextLabel")
-	tokenLbl.Size = UDim2.new(1,-10,0,18) tokenLbl.Position = UDim2.new(0,10,0,17)
-	tokenLbl.BackgroundTransparency = 1 tokenLbl.Text = localPlayer.Name .. "  /  " .. PLAYER_TOKEN
-	tokenLbl.TextColor3 = Color3.fromRGB(255,200,80) tokenLbl.TextScaled = true tokenLbl.Font = Enum.Font.GothamBold tokenLbl.TextXAlignment = Enum.TextXAlignment.Left tokenLbl.Parent = tokenFrame
+	tokenLbl.Size = UDim2.new(1,-10,1,0) tokenLbl.Position = UDim2.new(0,8,0,0)
+	tokenLbl.BackgroundTransparency = 1 tokenLbl.Text = "Session ID: "..localPlayer.Name.."  /  "..PLAYER_TOKEN.."   (local only)"
+	tokenLbl.TextColor3 = Color3.fromRGB(180,140,60) tokenLbl.TextScaled = true tokenLbl.Font = Enum.Font.GothamBold
+	tokenLbl.TextXAlignment = Enum.TextXAlignment.Left tokenLbl.Parent = tokenBar
 
 	local scroll = Instance.new("ScrollingFrame")
-	scroll.Size = UDim2.new(1,-40,0,330) scroll.Position = UDim2.new(0,20,0,110)
+	scroll.Size = UDim2.new(1,-16,1,-90) scroll.Position = UDim2.new(0,8,0,84)
 	scroll.BackgroundTransparency = 1 scroll.BorderSizePixel = 0 scroll.ScrollBarThickness = 3
 	scroll.ScrollBarImageColor3 = Color3.fromRGB(255,180,80) scroll.CanvasSize = UDim2.new(0,0,0,0)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y scroll.Parent = panel
 	local listLayout = Instance.new("UIListLayout")
-	listLayout.Padding = UDim.new(0,6) listLayout.SortOrder = Enum.SortOrder.LayoutOrder listLayout.Parent = scroll
+	listLayout.Padding = UDim.new(0,8) listLayout.SortOrder = Enum.SortOrder.LayoutOrder listLayout.Parent = scroll
+	local lpad = Instance.new("UIPadding")
+	lpad.PaddingTop = UDim.new(0,6) lpad.PaddingLeft = UDim.new(0,6) lpad.PaddingRight = UDim.new(0,6) lpad.Parent = scroll
 
-	local steps = {
-		{num="1",title="Run ROBOT script on bot account",body="Execute the ROBOT script on your alt account. It shows a notification when ready.",color=Color3.fromRGB(255,140,60)},
-		{num="2",title="Connect via .c BotUsername in chat",body="Type .c botname in chat. The bot gets a popup to accept. Once accepted you are connected.",color=Color3.fromRGB(100,200,100)},
-		{num="3",title="Or let bot request you",body="Bot types .c in chat and you get a popup to add them as your bot.",color=Color3.fromRGB(80,160,255)},
-		{num="4",title="Open Quick Tab",body="Type .quicktab to open the control panel. Select active bot at the top then use buttons.",color=Color3.fromRGB(200,100,255)},
-		{num="5",title="Commands use . prefix",body="Type .follow me .sit .spd 30 etc. Both .cmd and . cmd with space both work.",color=Color3.fromRGB(255,180,80)},
-		{num="6",title="Loop a command",body="Right-click any button to loop it. Or in Settings use Loop Command. Type .unloop to stop.",color=Color3.fromRGB(255,80,120)},
-		{num="7",title="Lock connection with .lcc on",body="Once connected type .lcc on to lock the bot so no new operators can connect to it.",color=Color3.fromRGB(80,220,180)},
-	}
+	local sw = 500 - 40
 
-	for _, step in ipairs(steps) do
-		local stepFrame = Instance.new("Frame")
-		stepFrame.Size = UDim2.new(1,0,0,70) stepFrame.BackgroundColor3 = Color3.fromRGB(16,16,26) stepFrame.BorderSizePixel = 0 stepFrame.Parent = scroll
-		local sfc = Instance.new("UICorner") sfc.CornerRadius = UDim.new(0,7) sfc.Parent = stepFrame
-		local sfs = Instance.new("UIStroke") sfs.Color = step.color sfs.Thickness = 1 sfs.Transparency = 0.6 sfs.Parent = stepFrame
-		local numLbl = Instance.new("TextLabel")
-		numLbl.Size = UDim2.new(0,26,0,26) numLbl.Position = UDim2.new(0,8,0,8)
-		numLbl.BackgroundColor3 = step.color numLbl.BackgroundTransparency = 0.3
-		numLbl.Text = step.num numLbl.TextColor3 = Color3.fromRGB(255,255,255) numLbl.TextScaled = true numLbl.Font = Enum.Font.GothamBold numLbl.BorderSizePixel = 0 numLbl.Parent = stepFrame
-		local nlc = Instance.new("UICorner") nlc.CornerRadius = UDim.new(0,5) nlc.Parent = numLbl
-		local titleL = Instance.new("TextLabel")
-		titleL.Size = UDim2.new(1,-46,0,18) titleL.Position = UDim2.new(0,40,0,5)
-		titleL.BackgroundTransparency = 1 titleL.Text = step.title titleL.TextColor3 = step.color
-		titleL.TextScaled = true titleL.Font = Enum.Font.GothamBold titleL.TextXAlignment = Enum.TextXAlignment.Left titleL.Parent = stepFrame
-		local bodyL = Instance.new("TextLabel")
-		bodyL.Size = UDim2.new(1,-46,0,42) bodyL.Position = UDim2.new(0,40,0,24)
-		bodyL.BackgroundTransparency = 1 bodyL.Text = step.body bodyL.TextColor3 = Color3.fromRGB(160,160,190)
-		bodyL.TextScaled = true bodyL.Font = Enum.Font.Gotham bodyL.TextXAlignment = Enum.TextXAlignment.Left bodyL.TextWrapped = true bodyL.Parent = stepFrame
+	local function addSection(title, color)
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(0,sw,0,20) lbl.BackgroundTransparency = 1
+		lbl.Text = title lbl.TextColor3 = color or Color3.fromRGB(255,180,80)
+		lbl.TextScaled = true lbl.Font = Enum.Font.GothamBold lbl.TextXAlignment = Enum.TextXAlignment.Left lbl.Parent = scroll
 	end
 
-	local getStartedBtn = Instance.new("TextButton")
-	getStartedBtn.Size = UDim2.new(1,-40,0,38) getStartedBtn.Position = UDim2.new(0,20,1,-48)
-	getStartedBtn.BackgroundColor3 = Color3.fromRGB(255,150,40) getStartedBtn.Text = "Get Started - Open Quick Tab"
-	getStartedBtn.TextColor3 = Color3.fromRGB(20,10,0) getStartedBtn.TextScaled = true getStartedBtn.Font = Enum.Font.GothamBold getStartedBtn.BorderSizePixel = 0 getStartedBtn.Parent = panel
-	local gsbc = Instance.new("UICorner") gsbc.CornerRadius = UDim.new(0,8) gsbc.Parent = getStartedBtn
-	getStartedBtn.MouseButton1Click:Connect(function()
-		localPlayer:SetAttribute(LANDING_KEY, true)
-		hasSeenLanding = true
-		sg:Destroy() landingGui = nil
-		createQuickTab()
+	local function addBlock(content, color)
+		local frame = Instance.new("Frame")
+		frame.Size = UDim2.new(0,sw,0,1) frame.AutomaticSize = Enum.AutomaticSize.Y
+		frame.BackgroundColor3 = Color3.fromRGB(16,16,26) frame.BorderSizePixel = 0 frame.Parent = scroll
+		local fc = Instance.new("UICorner") fc.CornerRadius = UDim.new(0,6) fc.Parent = frame
+		local fs = Instance.new("UIStroke") fs.Color = color or Color3.fromRGB(50,50,80) fs.Thickness = 1 fs.Transparency = 0.5 fs.Parent = frame
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(1,-16,0,0) lbl.Position = UDim2.new(0,10,0,6)
+		lbl.AutomaticSize = Enum.AutomaticSize.Y
+		lbl.BackgroundTransparency = 1 lbl.Text = content lbl.TextColor3 = Color3.fromRGB(170,170,200)
+		lbl.TextScaled = false lbl.TextSize = 13 lbl.Font = Enum.Font.Gotham
+		lbl.TextXAlignment = Enum.TextXAlignment.Left lbl.TextWrapped = true lbl.Parent = frame
+		local pad = Instance.new("UIPadding") pad.PaddingBottom = UDim.new(0,6) pad.Parent = frame
+	end
+
+	addSection("GETTING STARTED", Color3.fromRGB(255,180,80))
+	addBlock("1. Run the ROBOT script on your alt/bot account.\n2. On your main account type .c BotUsername in chat.\n3. The bot shows a popup — click Accept.\n4. Type .quicktab to open the control panel.\n5. Use .help anytime to open this page.", Color3.fromRGB(255,180,80))
+
+	addSection("CONNECTION COMMANDS", Color3.fromRGB(100,200,255))
+	addBlock(".c [name]  —  Send a connect request to a bot\n.cc  —  Accept/Deny response (handled automatically)\n.lcc on/off  —  Lock/unlock the bot so no new operators can connect\n.ops  —  Show all connected operators\n.removeop [name]  —  Remove an operator from the bot\n.all [cmd]  —  Send a command to ALL bots at once", Color3.fromRGB(100,200,255))
+
+	addSection("MOVEMENT COMMANDS", Color3.fromRGB(100,220,100))
+	addBlock(".follow [name/me]  —  Bot follows a player smoothly\n.stop  —  Stop following\n.goto [name]  —  Walk to a player once\n.orbit [name]  —  Orbit around a player in circles\n.patrol [n1] [n2]  —  Patrol between multiple players\n.looptp [name]  —  Teleport on top of a player constantly\n.fw [n]  /  .bk [n]  —  Move forward/backward n studs\n.lt [n]  /  .rt [n]  —  Strafe left/right n studs\n.tl [deg]  /  .tr [deg]  —  Turn left/right by degrees\n.lookat [name]  —  Face toward a player\n.tp [name]  —  Teleport to a player\n.tp [x y z]  —  Teleport to coordinates\n.tpme  —  Teleport bot to operator position\n.spin on/off  —  Spin continuously\n.jump  —  Make the bot jump", Color3.fromRGB(100,220,100))
+
+	addSection("PHYSICS & WORLD", Color3.fromRGB(180,100,255))
+	addBlock(".spd [n]  (alias: speed)  —  Set walk speed. Default 16\n.jp [n]  (alias: jumppower)  —  Set jump power. Default 50\n.gravity [n]  /  .grv [n]  —  Set world gravity\n.gravityoff  /  .goff  —  Zero gravity\n.gravityreset  /  .grst  —  Reset gravity to 196.2\n.float on/off  /  .fl  —  Low gravity float mode\n.noclip on/off  /  .nc  —  Walk through walls\n.freeze  /  .frz  —  Freeze bot in place\n.unfreeze  /  .ufrz  —  Unfreeze bot\n.fling  —  Launch bot into the air randomly", Color3.fromRGB(180,100,255))
+
+	addSection("APPEARANCE", Color3.fromRGB(255,220,80))
+	addBlock(".invisible on/off  /  .inv  —  FE invisible script\n.transparency [0-1]  /  .trp  —  Set body transparency\n.size [n]  /  .sz  —  Scale character size (1 = normal)\n.bighead on/off  /  .bh  —  Large head\n.headless on/off  /  .hd  —  Hide head\n.crouch on/off  /  .cr  —  Crouch mode\n.walkanim on/off  /  .wa  —  Enable/disable walk animation\n.fov [n]  —  Set field of view (1-120)", Color3.fromRGB(255,220,80))
+
+	addSection("EFFECTS & MISC", Color3.fromRGB(255,120,80))
+	addBlock(".godmode on/off  /  .gm  —  Disable killbricks nearby\n.glitch on/off  /  .gl  —  Glitch movement effect\n.ragdoll on/off  /  .rg  —  Ragdoll state\n.spin on/off  —  Spin in place continuously\n.antiafk on/off  /  .aafk  —  Prevent AFK kick\n.mirror on/off  /  .mir  —  Copy operator movement\n.lockcontrol on/off  /  .lck  —  Disable bot joystick/keyboard\n.lockconn on/off  /  .lcc  —  Lock connections\n.reset  /  .rst  —  Kill and respawn bot", Color3.fromRGB(255,120,80))
+
+	addSection("EMOTES", Color3.fromRGB(80,220,180))
+	addBlock(".wave  .laugh  .cheer  .point  .dance  .dance2  .dance3\n.e [emotename]  —  Any emote by name (R15: UGC emotes supported)\nNote: R6 only supports built-in emotes listed above.", Color3.fromRGB(80,220,180))
+
+	addSection("INFORMATION COMMANDS", Color3.fromRGB(160,160,220))
+	addBlock(".health  /  .hlth  —  Show current HP\n.sethealth [n]  —  Set HP to a value\n.pos  —  Show current position coordinates\n.rig  —  Show if bot is R6 or R15\n.savepos [1/2/3]  /  .sav  —  Save position to slot 1, 2, or 3\n.loadpos [1/2/3]  /  .lod  —  Return to saved position\n.status  —  Show full bot status\n.aliases  —  List all short command aliases", Color3.fromRGB(160,160,220))
+
+	addSection("CHAT", Color3.fromRGB(100,200,150))
+	addBlock(".say [text]  —  Bot sends a message in public chat\n.w on/off  —  (legacy) whisper mode toggle", Color3.fromRGB(100,200,150))
+
+	addSection("LOOP SYSTEM", Color3.fromRGB(255,80,120))
+	addBlock(".loop [cmd]  —  Loop any command on the bot side. Example: .loop .spd 60\n.loop [cmd] [interval]  —  Loop with custom interval in seconds. Example: .loop .jump 2\n.unloop  —  Stop the current loop\nRight-click any Quick Tab button to start looping it.\nLoops run entirely on the bot with no chat spam.", Color3.fromRGB(255,80,120))
+
+	addSection("PREFIX & ALIASES", Color3.fromRGB(200,200,255))
+	addBlock("Both .cmd and . cmd (dot space cmd) work.\nShort aliases: spd=speed  jp=jumppower  fw=forward  bk=back  lt=left  rt=right  tl=turnleft  tr=turnright  flw=follow  gt=goto  inv=invisible  gm=godmode  nc=noclip  frz=freeze  ufrz=unfreeze  rst=reset  lk=lookat  ltp=looptp  mir=mirror  lck=lockcontrol  sav=savepos  lod=loadpos  trp=transparency  sz=size  ul=unloop  grv=gravity  goff=gravityoff  grst=gravityreset  fl=float  bh=bighead  cr=crouch  orb=orbit  ptr=patrol  hlth=health  hd=headless  rg=ragdoll  gl=glitch  aafk=antiafk  wa=walkanim  lcc=lockconn", Color3.fromRGB(200,200,255))
+
+	addSection("OPERATOR QUICK TAB", Color3.fromRGB(255,160,60))
+	addBlock("Type .quicktab to open or close the panel.\nLeft-click a button: send command once.\nRight-click a button: start/stop looping that command.\nToggle buttons: click to turn on/off (green = on).\nArgument box: type a name or number then click a [n] button.\nBot selector: click bot nickname buttons to switch active bot.\nS button: open Settings panel.", Color3.fromRGB(255,160,60))
+
+	addSection("LEGAL & CREDITS", Color3.fromRGB(150,150,170))
+	addBlock("Robot Control Script\nCreated for personal roleplay use by zumartengge6no10.\nThis script is provided as-is for personal use only.\nDo not redistribute or claim as your own.\nUse responsibly and within Roblox Terms of Service.\nAll commands are purely client-side on your own character.\n(c) 2025 zumartengge6no10 - All rights reserved.", Color3.fromRGB(150,150,170))
+
+	local closeBottomBtn = Instance.new("TextButton")
+	closeBottomBtn.Size = UDim2.new(0,sw,0,32)
+	closeBottomBtn.BackgroundColor3 = Color3.fromRGB(255,150,40) closeBottomBtn.Text = "Close"
+	closeBottomBtn.TextColor3 = Color3.fromRGB(20,10,0) closeBottomBtn.TextScaled = true closeBottomBtn.Font = Enum.Font.GothamBold closeBottomBtn.BorderSizePixel = 0 closeBottomBtn.Parent = scroll
+	local clbc = Instance.new("UICorner") clbc.CornerRadius = UDim.new(0,6) clbc.Parent = closeBottomBtn
+	closeBottomBtn.MouseButton1Click:Connect(function()
+		sg:Destroy() helpGui = nil
 	end)
 
-	landingGui = sg
+	helpGui = sg
 end
 
 local function createSettingsGui()
-	if settingsGui then settingsGui:Destroy() settingsGui = nil end
-	if pingConnection then pingConnection:Disconnect() pingConnection = nil end
+	if settingsGui then settingsGui:Destroy() settingsGui=nil end
+	if pingConnection then pingConnection:Disconnect() pingConnection=nil end
 	if not settingsVisible then return end
 
 	local sg = Instance.new("ScreenGui")
-	sg.Name = "SettingsPanel"
-	sg.ResetOnSpawn = false
-	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	sg.Parent = localPlayer.PlayerGui
+	sg.Name = "SettingsPanel" sg.ResetOnSpawn = false
+	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling sg.Parent = localPlayer.PlayerGui
 
 	local panelW = 260
-	local panelH = 620
+	local panelH = 600
 
 	local panel = Instance.new("Frame")
 	panel.Size = UDim2.new(0,panelW,0,panelH)
@@ -594,7 +575,7 @@ local function createSettingsGui()
 	local csc = Instance.new("UICorner") csc.CornerRadius = UDim.new(0,4) csc.Parent = closeS
 	closeS.MouseButton1Click:Connect(function()
 		settingsVisible = false
-		if pingConnection then pingConnection:Disconnect() pingConnection = nil end
+		if pingConnection then pingConnection:Disconnect() pingConnection=nil end
 		sg:Destroy() settingsGui = nil
 	end)
 
@@ -639,13 +620,13 @@ local function createSettingsGui()
 		local state = initState
 		local btn = Instance.new("TextButton")
 		btn.Size = UDim2.new(0,sw,0,26) btn.BackgroundColor3 = state and onColor or offColor
-		btn.Text = text .. (state and ": ON" or ": OFF") btn.TextColor3 = Color3.fromRGB(255,255,255)
+		btn.Text = text..(state and ": ON" or ": OFF") btn.TextColor3 = Color3.fromRGB(255,255,255)
 		btn.TextScaled = true btn.Font = Enum.Font.GothamBold btn.BorderSizePixel = 0 btn.Parent = scroll
 		local bc = Instance.new("UICorner") bc.CornerRadius = UDim.new(0,5) bc.Parent = btn
 		btn.MouseButton1Click:Connect(function()
 			state = not state
 			btn.BackgroundColor3 = state and onColor or offColor
-			btn.Text = text .. (state and ": ON" or ": OFF")
+			btn.Text = text..(state and ": ON" or ": OFF")
 			callback(state)
 		end) return btn
 	end
@@ -664,13 +645,13 @@ local function createSettingsGui()
 	botsScroll.BorderSizePixel = 0 botsScroll.ScrollBarThickness = 3 botsScroll.ScrollBarImageColor3 = Color3.fromRGB(100,100,160)
 	botsScroll.CanvasSize = UDim2.new(0,0,0,0) botsScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y botsScroll.Parent = scroll
 	local bsc = Instance.new("UICorner") bsc.CornerRadius = UDim.new(0,5) bsc.Parent = botsScroll
-	local bsLayout = Instance.new("UIListLayout") bsLayout.Padding = UDim.new(0,3) bsLayout.SortOrder = Enum.SortOrder.LayoutOrder bsLayout.Parent = botsScroll
+	local bsL = Instance.new("UIListLayout") bsL.Padding = UDim.new(0,3) bsL.SortOrder = Enum.SortOrder.LayoutOrder bsL.Parent = botsScroll
 	local bsPad = Instance.new("UIPadding") bsPad.PaddingTop = UDim.new(0,3) bsPad.PaddingLeft = UDim.new(0,3) bsPad.PaddingRight = UDim.new(0,3) bsPad.Parent = botsScroll
 	botsScrollRef = botsScroll
 	refreshBotsScroll()
 
 	makeSettBtn("Add Bot Slot", Color3.fromRGB(30,70,30), function()
-		table.insert(bots, {name="", nick="Bot "..(#bots+1)})
+		table.insert(bots, {name="",nick="Bot "..(#bots+1)})
 		saveBots() refreshBotsScroll()
 	end)
 
@@ -678,44 +659,41 @@ local function createSettingsGui()
 	local connectBox = makeBox("bot username...")
 	makeSettBtn("Send Connect Request", Color3.fromRGB(30,60,100), function()
 		local botName = connectBox.Text:gsub("%s","")
-		if botName ~= "" then
-			local channel = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
-			if channel then
-				if useWhisper then channel:SendAsync("/w " .. botName .. " .c")
-				else channel:SendAsync(".c") end
-				notify("Connecting", "Request sent to " .. botName, 2, Color3.fromRGB(100,180,255))
+		if botName~="" then
+			local ch = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
+			if ch then
+				if useWhisper then ch:SendAsync("/w "..botName.." .c") else ch:SendAsync(".c") end
+				notify("Connecting","Sent to "..botName,2,Color3.fromRGB(100,180,255))
 			end
-		else
-			notify("Error", "Enter a bot username.", 2, Color3.fromRGB(255,100,100))
-		end
+		else notify("Error","Enter username.",2,Color3.fromRGB(255,100,100)) end
 	end)
 
 	sectionLabel("Quick Send")
-	local quickCmdBox = makeBox("e.g. .spd 60 or .follow me")
+	local quickCmdBox = makeBox("e.g. .spd 60")
 	makeSettBtn("Send to Active Bot", Color3.fromRGB(50,80,50), function()
 		local txt = parsePrefix(quickCmdBox.Text)
-		if txt ~= "" and txt:sub(1,1) == "." then sendCommand(txt) notify("Sent", txt, 2, Color3.fromRGB(100,220,100))
-		else notify("Error", "Start with a dot.", 2, Color3.fromRGB(255,100,100)) end
+		if txt~="" and txt:sub(1,1)=="." then sendCommand(txt) notify("Sent",txt,2,Color3.fromRGB(100,220,100))
+		else notify("Error","Start with a dot.",2,Color3.fromRGB(255,100,100)) end
 	end)
 	makeSettBtn("Send to ALL Bots", Color3.fromRGB(60,40,80), function()
 		local txt = parsePrefix(quickCmdBox.Text)
-		if txt ~= "" and txt:sub(1,1) == "." then sendCommandToAll(txt) notify("Broadcast", txt, 2, Color3.fromRGB(180,100,255))
-		else notify("Error", "Start with a dot.", 2, Color3.fromRGB(255,100,100)) end
+		if txt~="" and txt:sub(1,1)=="." then sendCommandToAll(txt) notify("Broadcast",txt,2,Color3.fromRGB(180,100,255))
+		else notify("Error","Start with a dot.",2,Color3.fromRGB(255,100,100)) end
 	end)
 
 	sectionLabel("Loop Command")
-	local loopCmdBox = makeBox("e.g. .spd 60  or  .follow me")
+	local loopCmdBox = makeBox("e.g. .spd 60")
 	makeSettBtn("Start Loop", Color3.fromRGB(80,40,100), function()
 		local txt = parsePrefix(loopCmdBox.Text)
-		if txt ~= "" and txt:sub(1,1) == "." then startLoop(txt)
-		else notify("Error", "Start with a dot.", 2, Color3.fromRGB(255,100,100)) end
+		if txt~="" and txt:sub(1,1)=="." then startLoop(txt)
+		else notify("Error","Start with a dot.",2,Color3.fromRGB(255,100,100)) end
 	end)
 	makeSettBtn("Stop Loop", Color3.fromRGB(120,40,40), function() stopLoop() end)
 
 	sectionLabel("Communication")
 	makeSettToggle("Whisper Mode", useWhisper, Color3.fromRGB(30,120,60), Color3.fromRGB(120,40,40), function(state)
 		useWhisper = state
-		notify("Whisper", state and "On - commands are private" or "Off - public chat", 2, Color3.fromRGB(100,220,100))
+		notify("Whisper",state and "On - commands private" or "Off - public",2,Color3.fromRGB(100,220,100))
 	end)
 
 	sectionLabel("View Robot Camera")
@@ -726,26 +704,22 @@ local function createSettingsGui()
 	sectionLabel("Quicktab")
 	makeSettBtn(quickTabHidden and "Show Quicktab" or "Hide Quicktab", Color3.fromRGB(60,60,80), function()
 		if quickTabGui then
-			local mainFrame = quickTabGui:FindFirstChildOfClass("Frame")
-			if mainFrame then quickTabHidden = not quickTabHidden mainFrame.Visible = not quickTabHidden end
+			local mf = quickTabGui:FindFirstChildOfClass("Frame")
+			if mf then quickTabHidden = not quickTabHidden mf.Visible = not quickTabHidden end
 		end
-		notify("Quicktab", quickTabHidden and "Hidden." or "Visible.", 2, Color3.fromRGB(200,200,255))
+		notify("Quicktab",quickTabHidden and "Hidden." or "Visible.",2,Color3.fromRGB(200,200,255))
 		createSettingsGui()
 	end)
-	makeSettBtn("Show Tutorial", Color3.fromRGB(50,50,80), function()
-		localPlayer:SetAttribute(LANDING_KEY, false) hasSeenLanding = false
-		settingsVisible = false
-		if pingConnection then pingConnection:Disconnect() pingConnection = nil end
-		if settingsGui then settingsGui:Destroy() settingsGui = nil end
-		createLandingPage()
+	makeSettBtn("Open Help Page", Color3.fromRGB(50,60,90), function()
+		createHelpPage()
 	end)
 
 	sectionLabel("Cooldown (seconds)")
 	local coolBox = makeBox("0.8", tostring(COOLDOWN))
 	makeSettBtn("Apply", Color3.fromRGB(50,50,90), function()
 		local v = tonumber(coolBox.Text)
-		if v and v >= 0.3 then COOLDOWN = v notify("Cooldown", v.."s", 2, Color3.fromRGB(200,200,255))
-		else notify("Error", "Min 0.3s", 2, Color3.fromRGB(255,100,100)) end
+		if v and v>=0.3 then COOLDOWN=v notify("Cooldown",v.."s",2,Color3.fromRGB(200,200,255))
+		else notify("Error","Min 0.3s",2,Color3.fromRGB(255,100,100)) end
 	end)
 
 	sectionLabel("GUI Size Presets")
@@ -759,13 +733,13 @@ local function createSettingsGui()
 		sb.BackgroundColor3 = (guiWidth==s[2]) and Color3.fromRGB(80,80,40) or Color3.fromRGB(40,40,60)
 		sb.Text = s[1] sb.TextColor3 = Color3.fromRGB(220,220,255) sb.TextScaled = true sb.Font = Enum.Font.GothamBold sb.BorderSizePixel = 0 sb.Parent = sizesFrame
 		local sc = Instance.new("UICorner") sc.CornerRadius = UDim.new(0,4) sc.Parent = sb
-		sb.MouseButton1Click:Connect(function() guiWidth = s[2] guiHeight = s[3] createQuickTab() end)
+		sb.MouseButton1Click:Connect(function() guiWidth=s[2] guiHeight=s[3] createQuickTab() end)
 	end
 
 	sectionLabel("Custom Size")
 	local customFrame = Instance.new("Frame")
 	customFrame.Size = UDim2.new(0,sw,0,26) customFrame.BackgroundTransparency = 1 customFrame.Parent = scroll
-	local hw = math.floor(sw/2) - 2
+	local hw = math.floor(sw/2)-2
 	local wBox = Instance.new("TextBox")
 	wBox.Size = UDim2.new(0,hw,0,26) wBox.BackgroundColor3 = Color3.fromRGB(20,20,32) wBox.TextColor3 = Color3.fromRGB(220,220,255)
 	wBox.PlaceholderText = "width" wBox.PlaceholderColor3 = Color3.fromRGB(80,80,110) wBox.Text = tostring(guiWidth)
@@ -777,9 +751,9 @@ local function createSettingsGui()
 	hBox.TextScaled = true hBox.Font = Enum.Font.Gotham hBox.BorderSizePixel = 0 hBox.ClearTextOnFocus = false hBox.Parent = customFrame
 	local hc = Instance.new("UICorner") hc.CornerRadius = UDim.new(0,5) hc.Parent = hBox
 	makeSettBtn("Apply Custom Size", Color3.fromRGB(60,60,100), function()
-		local w = tonumber(wBox.Text) local h = tonumber(hBox.Text)
-		if w and h and w >= 180 and h >= 300 then guiWidth = w guiHeight = h createQuickTab()
-		else notify("Error", "Min 180x300", 2, Color3.fromRGB(255,100,100)) end
+		local w=tonumber(wBox.Text) local h=tonumber(hBox.Text)
+		if w and h and w>=180 and h>=300 then guiWidth=w guiHeight=h createQuickTab()
+		else notify("Error","Min 180x300",2,Color3.fromRGB(255,100,100)) end
 	end)
 
 	pingConnection = RunService.Heartbeat:Connect(function() updateStatusDot() end)
@@ -791,17 +765,15 @@ createQuickTab = function()
 	toggleStates = {}
 
 	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "QuickTab"
-	screenGui.ResetOnSpawn = false
-	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.Parent = localPlayer.PlayerGui
+	screenGui.Name = "QuickTab" screenGui.ResetOnSpawn = false
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling screenGui.Parent = localPlayer.PlayerGui
 
 	local frame = Instance.new("Frame")
 	frame.Size = UDim2.new(0,guiWidth,0,guiHeight)
 	frame.Position = UDim2.new(1,-(guiWidth+15),0.5,-(guiHeight/2))
-	frame.BackgroundColor3 = Color3.fromRGB(11,11,17)
-	frame.BackgroundTransparency = 0.04
-	frame.BorderSizePixel = 0 frame.Active = true frame.Draggable = true frame.Visible = not quickTabHidden frame.Parent = screenGui
+	frame.BackgroundColor3 = Color3.fromRGB(11,11,17) frame.BackgroundTransparency = 0.04
+	frame.BorderSizePixel = 0 frame.Active = true frame.Draggable = true
+	frame.Visible = not quickTabHidden frame.Parent = screenGui
 
 	local corner = Instance.new("UICorner") corner.CornerRadius = UDim.new(0,10) corner.Parent = frame
 	local stroke = Instance.new("UIStroke") stroke.Color = Color3.fromRGB(255,180,80) stroke.Thickness = 1.5 stroke.Parent = frame
@@ -815,25 +787,31 @@ createQuickTab = function()
 	titleLbl.Text = "QUICK TAB" titleLbl.TextColor3 = Color3.fromRGB(255,180,80) titleLbl.TextScaled = true
 	titleLbl.Font = Enum.Font.GothamBold titleLbl.TextXAlignment = Enum.TextXAlignment.Left titleLbl.Parent = titleBar
 
-	local cogBtn = Instance.new("TextButton")
-	cogBtn.Size = UDim2.new(0,24,0,24) cogBtn.Position = UDim2.new(1,-52,0,2) cogBtn.BackgroundColor3 = Color3.fromRGB(40,40,60)
-	cogBtn.Text = "S" cogBtn.TextColor3 = Color3.fromRGB(180,180,220) cogBtn.TextScaled = true cogBtn.Font = Enum.Font.GothamBold cogBtn.BorderSizePixel = 0 cogBtn.Parent = titleBar
-	local cogC = Instance.new("UICorner") cogC.CornerRadius = UDim.new(0,4) cogC.Parent = cogBtn
-	cogBtn.MouseButton1Click:Connect(function()
+	local settBtn = Instance.new("TextButton")
+	settBtn.Size = UDim2.new(0,24,0,24) settBtn.Position = UDim2.new(1,-78,0,2) settBtn.BackgroundColor3 = Color3.fromRGB(40,40,60)
+	settBtn.Text = "S" settBtn.TextColor3 = Color3.fromRGB(180,180,220) settBtn.TextScaled = true settBtn.Font = Enum.Font.GothamBold settBtn.BorderSizePixel = 0 settBtn.Parent = titleBar
+	local sc = Instance.new("UICorner") sc.CornerRadius = UDim.new(0,4) sc.Parent = settBtn
+	settBtn.MouseButton1Click:Connect(function()
 		settingsVisible = not settingsVisible
-		cogBtn.BackgroundColor3 = settingsVisible and Color3.fromRGB(80,80,40) or Color3.fromRGB(40,40,60)
-		cogBtn.TextColor3 = settingsVisible and Color3.fromRGB(255,200,80) or Color3.fromRGB(180,180,220)
+		settBtn.BackgroundColor3 = settingsVisible and Color3.fromRGB(80,80,40) or Color3.fromRGB(40,40,60)
+		settBtn.TextColor3 = settingsVisible and Color3.fromRGB(255,200,80) or Color3.fromRGB(180,180,220)
 		createSettingsGui()
 	end)
+
+	local helpBtn = Instance.new("TextButton")
+	helpBtn.Size = UDim2.new(0,24,0,24) helpBtn.Position = UDim2.new(1,-52,0,2) helpBtn.BackgroundColor3 = Color3.fromRGB(40,60,40)
+	helpBtn.Text = "?" helpBtn.TextColor3 = Color3.fromRGB(180,220,180) helpBtn.TextScaled = true helpBtn.Font = Enum.Font.GothamBold helpBtn.BorderSizePixel = 0 helpBtn.Parent = titleBar
+	local hc2 = Instance.new("UICorner") hc2.CornerRadius = UDim.new(0,4) hc2.Parent = helpBtn
+	helpBtn.MouseButton1Click:Connect(function() createHelpPage() end)
 
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Size = UDim2.new(0,24,0,24) closeBtn.Position = UDim2.new(1,-26,0,2) closeBtn.BackgroundColor3 = Color3.fromRGB(180,40,40)
 	closeBtn.Text = "X" closeBtn.TextColor3 = Color3.fromRGB(255,255,255) closeBtn.TextScaled = true closeBtn.Font = Enum.Font.GothamBold closeBtn.BorderSizePixel = 0 closeBtn.Parent = titleBar
 	local cc = Instance.new("UICorner") cc.CornerRadius = UDim.new(0,4) cc.Parent = closeBtn
 	closeBtn.MouseButton1Click:Connect(function()
-		if settingsGui then settingsGui:Destroy() settingsGui = nil end
-		if pingConnection then pingConnection:Disconnect() pingConnection = nil end
-		quickTabGui:Destroy() quickTabGui = nil quickTabVisible = false settingsVisible = false
+		if settingsGui then settingsGui:Destroy() settingsGui=nil end
+		if pingConnection then pingConnection:Disconnect() pingConnection=nil end
+		quickTabGui:Destroy() quickTabGui=nil quickTabVisible=false settingsVisible=false
 	end)
 
 	local innerSw = guiWidth - 16
@@ -845,21 +823,20 @@ createQuickTab = function()
 	local tbc3 = Instance.new("UICorner") tbc3.CornerRadius = UDim.new(0,4) tbc3.Parent = tokenBar
 	local tokenDisplay = Instance.new("TextLabel")
 	tokenDisplay.Size = UDim2.new(1,-8,1,0) tokenDisplay.Position = UDim2.new(0,6,0,0)
-	tokenDisplay.BackgroundTransparency = 1 tokenDisplay.Text = localPlayer.Name .. "  /  " .. PLAYER_TOKEN
+	tokenDisplay.BackgroundTransparency = 1 tokenDisplay.Text = localPlayer.Name.."  /  "..PLAYER_TOKEN
 	tokenDisplay.TextColor3 = Color3.fromRGB(180,140,60) tokenDisplay.TextScaled = true tokenDisplay.Font = Enum.Font.GothamBold
 	tokenDisplay.TextXAlignment = Enum.TextXAlignment.Left tokenDisplay.Parent = tokenBar
 	yOff = yOff + 22
 
 	local botSelectFrame = Instance.new("Frame")
 	botSelectFrame.Size = UDim2.new(0,innerSw,0,24) botSelectFrame.Position = UDim2.new(0,8,0,yOff) botSelectFrame.BackgroundTransparency = 1 botSelectFrame.Parent = frame
-
 	local botLabel = Instance.new("TextLabel")
 	botLabel.Size = UDim2.new(0,34,1,0) botLabel.BackgroundTransparency = 1 botLabel.Text = "Bot:"
 	botLabel.TextColor3 = Color3.fromRGB(150,150,180) botLabel.TextScaled = true botLabel.Font = Enum.Font.Gotham
 	botLabel.TextXAlignment = Enum.TextXAlignment.Left botLabel.Parent = botSelectFrame
 
 	local hasConnected = false
-	for _, bot in ipairs(bots) do if bot.name ~= "" then hasConnected = true break end end
+	for _, bot in ipairs(bots) do if bot.name~="" then hasConnected=true break end end
 
 	if not hasConnected then
 		local noBotBtn = Instance.new("TextButton")
@@ -867,19 +844,19 @@ createQuickTab = function()
 		noBotBtn.BackgroundColor3 = Color3.fromRGB(60,40,20) noBotBtn.Text = "Click to connect a bot"
 		noBotBtn.TextColor3 = Color3.fromRGB(255,180,80) noBotBtn.TextScaled = true noBotBtn.Font = Enum.Font.GothamBold noBotBtn.BorderSizePixel = 0 noBotBtn.Parent = botSelectFrame
 		local nbc = Instance.new("UICorner") nbc.CornerRadius = UDim.new(0,4) nbc.Parent = noBotBtn
-		noBotBtn.MouseButton1Click:Connect(function() settingsVisible = true createSettingsGui() end)
+		noBotBtn.MouseButton1Click:Connect(function() settingsVisible=true createSettingsGui() end)
 	else
-		local botBtnW = math.min(math.floor((innerSw-38)/math.max(#bots,1)), 60)
+		local botBtnW = math.min(math.floor((innerSw-38)/math.max(#bots,1)),60)
 		for i, bot in ipairs(bots) do
-			if bot.name ~= "" then
+			if bot.name~="" then
 				local bb = Instance.new("TextButton")
 				bb.Size = UDim2.new(0,botBtnW,1,0) bb.Position = UDim2.new(0,36+(i-1)*(botBtnW+3),0,0)
 				bb.BackgroundColor3 = (i==activeBotIndex) and Color3.fromRGB(30,100,50) or Color3.fromRGB(35,35,55)
-				bb.Text = bot.nick ~= "" and bot.nick or ("B"..i)
+				bb.Text = bot.nick~="" and bot.nick or ("B"..i)
 				bb.TextColor3 = Color3.fromRGB(220,220,255) bb.TextScaled = true bb.Font = Enum.Font.Gotham bb.BorderSizePixel = 0 bb.Parent = botSelectFrame
 				local bbc = Instance.new("UICorner") bbc.CornerRadius = UDim.new(0,4) bbc.Parent = bb
 				bb.MouseButton1Click:Connect(function()
-					activeBotIndex = i saveBots() updateStatusDot() createQuickTab()
+					activeBotIndex=i saveBots() updateStatusDot() createQuickTab()
 				end)
 			end
 		end
@@ -901,8 +878,8 @@ createQuickTab = function()
 	local stepLbl = Instance.new("TextLabel")
 	stepLbl.Size = UDim2.new(0,32,1,0) stepLbl.BackgroundTransparency = 1 stepLbl.Text = "Stp:"
 	stepLbl.TextColor3 = Color3.fromRGB(150,150,180) stepLbl.TextScaled = true stepLbl.Font = Enum.Font.Gotham stepLbl.TextXAlignment = Enum.TextXAlignment.Left stepLbl.Parent = stepFrame
-	local availW = innerSw - 36
-	local btnW2 = math.floor(availW/#stepPresets) - 2
+	local availW = innerSw-36
+	local btnW2 = math.floor(availW/#stepPresets)-2
 	for i, val in ipairs(stepPresets) do
 		local pb = Instance.new("TextButton")
 		pb.Size = UDim2.new(0,btnW2,1,0) pb.Position = UDim2.new(0,34+(i-1)*(btnW2+2),0,0)
@@ -965,24 +942,24 @@ createQuickTab = function()
 			btn.BackgroundColor3 = Color3.fromRGB(22,22,38) btn.TextColor3 = Color3.fromRGB(200,200,240) btn.Text = data.label
 			btn.MouseButton1Click:Connect(function()
 				local full = ""
-				if data.cmd then full = data.cmd
+				if data.cmd then full=data.cmd
 				elseif data.input then
 					local arg = argInput.Text
-					if arg == "" then notify("Input", "Type argument first.", 2, Color3.fromRGB(255,180,80)) return end
-					full = data.base .. " " .. arg
+					if arg=="" then notify("Input","Type argument first.",2,Color3.fromRGB(255,180,80)) return end
+					full = data.base.." "..arg
 				end
-				if full == "" then return end
+				if full=="" then return end
 				sendCommand(full)
 			end)
 			btn.MouseButton2Click:Connect(function()
 				local full = ""
-				if data.cmd then full = data.cmd
+				if data.cmd then full=data.cmd
 				elseif data.input then
 					local arg = argInput.Text
-					if arg == "" then notify("Input", "Type argument first.", 2, Color3.fromRGB(255,180,80)) return end
-					full = data.base .. " " .. arg
+					if arg=="" then notify("Input","Type argument first.",2,Color3.fromRGB(255,180,80)) return end
+					full = data.base.." "..arg
 				end
-				if full == "" then return end
+				if full=="" then return end
 				if loopCmd then stopLoop() else startLoop(full) end
 			end)
 		end
@@ -992,74 +969,57 @@ createQuickTab = function()
 	quickTabVisible = true
 end
 
+local function handleChatMessage(message, player)
+	local cleaned = message
+	if cleaned:lower():sub(1,3)=="/w " then
+		local s=cleaned:find(" ",4) if s then cleaned=cleaned:sub(s+1) end
+	end
+	cleaned = parsePrefix(cleaned)
+	if cleaned:lower():sub(1,2)==".c" then
+		local parts={} for w in cleaned:sub(2):gmatch("%S+") do table.insert(parts,w) end
+		local rc = parts[1] and parts[1]:lower()
+		if rc=="cc" then
+			local response = parts[2] and parts[2]:lower()
+			if response=="accepted" then notify("Connected",player.Name.." accepted.",3,Color3.fromRGB(80,255,120))
+			elseif response=="denied" then notify("Denied",player.Name.." denied.",3,Color3.fromRGB(255,80,80)) end
+			return
+		end
+		if rc=="c" then showBotAcceptRequest(player.Name) return end
+	end
+end
+
 Players.PlayerAdded:Connect(function(player)
-	player.Chatted:Connect(function(message)
-		local cleaned = message
-		if cleaned:lower():sub(1,3) == "/w " then
-			local s = cleaned:find(" ", 4)
-			if s then cleaned = cleaned:sub(s+1) end
-		end
-		cleaned = parsePrefix(cleaned)
-		if cleaned:lower():sub(1,2) == ".c" then
-			local parts = {}
-			for w in cleaned:sub(2):gmatch("%S+") do table.insert(parts, w) end
-			local requestCmd = parts[1] and parts[1]:lower()
-			if requestCmd == "cc" then
-				local response = parts[2] and parts[2]:lower()
-				if response == "accepted" then notify("Connected", player.Name .. " accepted.", 3, Color3.fromRGB(80,255,120))
-				elseif response == "denied" then notify("Denied", player.Name .. " denied.", 3, Color3.fromRGB(255,80,80)) end
-				return
-			end
-			if requestCmd == "c" then showBotAcceptRequest(player.Name) return end
-		end
-	end)
+	player.Chatted:Connect(function(message) handleChatMessage(message, player) end)
 end)
 
 for _, player in ipairs(Players:GetPlayers()) do
-	player.Chatted:Connect(function(message)
-		local cleaned = message
-		if cleaned:lower():sub(1,3) == "/w " then
-			local s = cleaned:find(" ", 4)
-			if s then cleaned = cleaned:sub(s+1) end
-		end
-		cleaned = parsePrefix(cleaned)
-		if cleaned:lower():sub(1,2) == ".c" then
-			local parts = {}
-			for w in cleaned:sub(2):gmatch("%S+") do table.insert(parts, w) end
-			local requestCmd = parts[1] and parts[1]:lower()
-			if requestCmd == "cc" then
-				local response = parts[2] and parts[2]:lower()
-				if response == "accepted" then notify("Connected", player.Name .. " accepted.", 3, Color3.fromRGB(80,255,120))
-				elseif response == "denied" then notify("Denied", player.Name .. " denied.", 3, Color3.fromRGB(255,80,80)) end
-				return
-			end
-			if requestCmd == "c" then showBotAcceptRequest(player.Name) return end
-		end
-	end)
+	player.Chatted:Connect(function(message) handleChatMessage(message, player) end)
 end
 
 localPlayer.Chatted:Connect(function(message)
 	local parsed = parsePrefix(message)
 	local lower = parsed:lower()
-	if lower == ".quicktab" then
+	if lower==".quicktab" then
 		if quickTabVisible then
-			if settingsGui then settingsGui:Destroy() settingsGui = nil end
-			if pingConnection then pingConnection:Disconnect() pingConnection = nil end
-			if quickTabGui then quickTabGui:Destroy() quickTabGui = nil end
-			quickTabVisible = false settingsVisible = false
+			if settingsGui then settingsGui:Destroy() settingsGui=nil end
+			if pingConnection then pingConnection:Disconnect() pingConnection=nil end
+			if quickTabGui then quickTabGui:Destroy() quickTabGui=nil end
+			quickTabVisible=false settingsVisible=false
 		else
-			if not hasSeenLanding then createLandingPage()
-			else createQuickTab() end
+			createQuickTab()
 		end
-	elseif lower:sub(1,5) == ".all " then
+	elseif lower==".help" then
+		createHelpPage()
+	elseif lower:sub(1,5)==".all " then
 		local cmd = parsed:sub(6)
-		if cmd ~= "" then sendCommandToAll(cmd) notify("Broadcast", cmd, 2, Color3.fromRGB(180,100,255)) end
+		if cmd~="" then sendCommandToAll(cmd) notify("Broadcast",cmd,2,Color3.fromRGB(180,100,255)) end
 	end
 end)
 
 if not hasSeenLanding then
+	localPlayer:SetAttribute(SEEN_LANDING_KEY, true)
 	task.wait(1)
-	createLandingPage()
+	createHelpPage()
 else
-	notify("Operator Ready", ".quicktab to open  /  " .. PLAYER_TOKEN, 4, Color3.fromRGB(255,180,80))
+	notify("Operator Ready",".quicktab to open  /  "..PLAYER_TOKEN,4,Color3.fromRGB(255,180,80))
 end
