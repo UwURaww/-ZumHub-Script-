@@ -24,15 +24,15 @@ local quickTabHidden = false
 local loopLabelRef = nil
 
 local BOTS_FILE = "robot_bots.txt"
-local BOTS_KEY = "RobotBots_v8"
-local ACTIVE_KEY = "RobotActive_v8"
-local SEEN_KEY = "RobotSeen_v6"
+local BOTS_KEY = "RobotBots_v9"
+local ACTIVE_KEY = "RobotActive_v9"
+local SEEN_KEY = "RobotSeen_v7"
 
 local bots = {}
 local activeBotIndex = 1
-
 local cmdLog = {}
 local MAX_LOG = 40
+local logScrollRef = nil
 
 local function generateToken(name)
 	local chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -52,12 +52,14 @@ local PLAYER_TOKEN = generateToken(localPlayer.Name..localPlayer.UserId)
 local function saveBots()
 	local lines = {}
 	for i, bot in ipairs(bots) do lines[i] = bot.name.."|"..bot.nick end
-	local data = table.concat(lines, "\n").."||"..tostring(activeBotIndex)
+	local data = table.concat(lines,"\n").."||"..tostring(activeBotIndex)
 	pcall(function() writefile(BOTS_FILE, data) end)
 	local encoded = {}
 	for i, bot in ipairs(bots) do encoded[i] = bot.name.."|"..bot.nick end
-	localPlayer:SetAttribute(BOTS_KEY, table.concat(encoded,";;"))
-	localPlayer:SetAttribute(ACTIVE_KEY, tostring(activeBotIndex))
+	pcall(function()
+		localPlayer:SetAttribute(BOTS_KEY, table.concat(encoded,";;"))
+		localPlayer:SetAttribute(ACTIVE_KEY, tostring(activeBotIndex))
+	end)
 end
 
 local function loadBots()
@@ -74,10 +76,13 @@ local function loadBots()
 			end
 		end
 		activeBotIndex = tonumber(activeRaw) or 1
-		if #bots > 0 then return end
+		if #bots > 0 then
+			if activeBotIndex > #bots then activeBotIndex = 1 end
+			return
+		end
 	end
-	local raw = localPlayer:GetAttribute(BOTS_KEY)
-	local activeRaw = localPlayer:GetAttribute(ACTIVE_KEY)
+	local raw = pcall(function() return localPlayer:GetAttribute(BOTS_KEY) end) and localPlayer:GetAttribute(BOTS_KEY)
+	local activeRaw = pcall(function() return localPlayer:GetAttribute(ACTIVE_KEY) end) and localPlayer:GetAttribute(ACTIVE_KEY)
 	if raw and raw ~= "" then
 		for _, entry in ipairs(raw:split(";;")) do
 			local p = entry:split("|")
@@ -92,29 +97,30 @@ local function loadBots()
 end
 
 loadBots()
-local hasSeenLanding = localPlayer:GetAttribute(SEEN_KEY) == true
+local hasSeenLanding = false
+pcall(function() hasSeenLanding = localPlayer:GetAttribute(SEEN_KEY) == true end)
 
 local function getActiveBot() return bots[activeBotIndex] or bots[1] end
 local function getRobotName() local b = getActiveBot() return b and b.name or "" end
 
-local notifQueue = {}
-local notifActive = false
-local logScrollRef = nil
-
 local function addToLog(text)
-	local ts = os.date and os.date("%H:%M:%S") or tostring(math.floor(tick() % 86400))
-	table.insert(cmdLog, 1, "["..ts.."]  "..text)
+	local ts = tostring(math.floor(tick() % 86400))
+	local h = math.floor(tick()/3600 % 24)
+	local m = math.floor(tick()/60 % 60)
+	local s = math.floor(tick() % 60)
+	local timeStr = string.format("%02d:%02d:%02d", h, m, s)
+	table.insert(cmdLog, 1, "["..timeStr.."] "..text)
 	if #cmdLog > MAX_LOG then table.remove(cmdLog) end
 	if logScrollRef then
 		for _, child in ipairs(logScrollRef:GetChildren()) do
-			if not child:IsA("UIListLayout") and not child:IsA("UIPadding") then child:Destroy() end
+			if not child:IsA("UIListLayout") then child:Destroy() end
 		end
 		for i, entry in ipairs(cmdLog) do
 			local lbl = Instance.new("TextLabel")
-			lbl.Size = UDim2.new(1,-8,0,16)
+			lbl.Size = UDim2.new(1,-6,0,14)
 			lbl.BackgroundTransparency = 1
 			lbl.Text = entry
-			lbl.TextColor3 = i == 1 and Color3.fromRGB(200,220,255) or Color3.fromRGB(120,120,150)
+			lbl.TextColor3 = i==1 and Color3.fromRGB(200,220,255) or Color3.fromRGB(100,100,140)
 			lbl.TextScaled = true
 			lbl.Font = Enum.Font.Gotham
 			lbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -122,6 +128,9 @@ local function addToLog(text)
 		end
 	end
 end
+
+local notifQueue = {}
+local notifActive = false
 
 local function processNotifQueue()
 	if notifActive or #notifQueue == 0 then return end
@@ -213,7 +222,7 @@ local function showBotAcceptRequest(botName)
 		else table.insert(bots,{name=botName,nick=botName}) end
 		saveBots()
 		notify("Bot Added",botName.." added and saved.",3,Color3.fromRGB(80,255,120))
-		addToLog("Bot added: "..botName)
+		addToLog("Bot connected: "..botName)
 		local ch = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
 		if ch then task.wait(0.2) ch:SendAsync("/w "..botName.." .cc accepted") end
 		if quickTabGui then quickTabGui:Destroy() createQuickTab() end
@@ -240,21 +249,16 @@ local function sendCommandToBot(cmd, botName)
 	local ch = game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral")
 	if not ch then return end
 	local cleaned = parsePrefix(cmd)
-	if useWhisper and botName ~= "" then
-		ch:SendAsync("/w "..botName.." "..cleaned)
-	else
-		ch:SendAsync(cleaned)
-	end
-	addToLog(cleaned..(botName~="" and " -> "..botName or ""))
+	if useWhisper and botName ~= "" then ch:SendAsync("/w "..botName.." "..cleaned)
+	else ch:SendAsync(cleaned) end
+	addToLog(cleaned..(botName~="" and " > "..botName or ""))
 end
 
 local function sendCommand(cmd) sendCommandToBot(cmd, getRobotName()) end
 
 local function sendCommandToAll(cmd)
 	for _, bot in ipairs(bots) do
-		if bot.name ~= "" then
-			task.spawn(function() task.wait(0.1) sendCommandToBot(cmd, bot.name) end)
-		end
+		if bot.name ~= "" then task.spawn(function() task.wait(0.1) sendCommandToBot(cmd, bot.name) end) end
 	end
 	addToLog("[ALL] "..cmd)
 end
@@ -323,10 +327,11 @@ local function updateStatusDot()
 end
 
 local toggleStates = {}
+local activeCategory = 1
 
 local COMMAND_CATEGORIES = {
 	{
-		name = "Movement",
+		name = "Move",
 		color = Color3.fromRGB(100,220,100),
 		cmds = {
 			{label="follow me", alias="flw me", cmd=".follow me"},
@@ -344,11 +349,13 @@ local COMMAND_CATEGORIES = {
 			{label="turnright", alias="tr", input=true, base=".tr"},
 			{label="follow", alias="flw", input=true, base=".flw"},
 			{label="goto", alias="gt", input=true, base=".gt"},
+			{label="walkto", alias="wt", input=true, base=".walkto"},
 			{label="orbit", alias="orb", input=true, base=".orb"},
 			{label="looptp", alias="ltp", input=true, base=".ltp"},
 			{label="lookat", alias="lk", input=true, base=".lk"},
 			{label="tp", alias="tp", input=true, base=".tp"},
 			{label="patrol", alias="ptr", input=true, base=".ptr"},
+			{label="jumpboost", alias="jb", input=true, base=".jb"},
 		}
 	},
 	{
@@ -356,7 +363,9 @@ local COMMAND_CATEGORIES = {
 		color = Color3.fromRGB(180,100,255),
 		cmds = {
 			{label="speed", alias="spd", input=true, base=".spd"},
+			{label="spd reset", alias="spdrst", cmd=".speed reset"},
 			{label="jumppower", alias="jp", input=true, base=".jp"},
+			{label="jp reset", alias="jprst", cmd=".jumppower reset"},
 			{label="gravity", alias="grv", input=true, base=".grv"},
 			{label="gravityoff", alias="goff", cmd=".gravityoff"},
 			{label="gravityreset", alias="grst", cmd=".gravityreset"},
@@ -364,10 +373,12 @@ local COMMAND_CATEGORIES = {
 			{label="float", alias="fl", toggle=true, on=".fl on", off=".fl off"},
 			{label="noclip", alias="nc", toggle=true, on=".nc on", off=".nc off"},
 			{label="spin", alias="spin", toggle=true, on=".spin on", off=".spin off"},
+			{label="fly", alias="fly", toggle=true, on=".fly on", off=".fly off"},
+			{label="swim", alias="swim", toggle=true, on=".swim on", off=".swim off"},
 		}
 	},
 	{
-		name = "Appearance",
+		name = "Look",
 		color = Color3.fromRGB(255,220,80),
 		cmds = {
 			{label="invisible", alias="inv", toggle=true, on=".inv on", off=".inv off"},
@@ -376,13 +387,25 @@ local COMMAND_CATEGORIES = {
 			{label="headless", alias="hd", toggle=true, on=".hd on", off=".hd off"},
 			{label="crouch", alias="cr", toggle=true, on=".cr on", off=".cr off"},
 			{label="walkanim", alias="wa", toggle=true, on=".wa on", off=".wa off"},
+			{label="nametag", alias="nmt", toggle=true, on=".nametag on", off=".nametag off"},
 			{label="transparency", alias="trp", input=true, base=".trp"},
 			{label="size", alias="sz", input=true, base=".sz"},
+			{label="size reset", alias="szrst", cmd=".size reset"},
 			{label="fov", alias="fov", input=true, base=".fov"},
 		}
 	},
 	{
-		name = "Effects",
+		name = "World",
+		color = Color3.fromRGB(80,180,255),
+		cmds = {
+			{label="time", alias="time", input=true, base=".time"},
+			{label="brightness", alias="br", input=true, base=".brightness"},
+			{label="fog", alias="fog", input=true, base=".fog"},
+			{label="ambient", alias="amb", input=true, base=".ambient"},
+		}
+	},
+	{
+		name = "FX",
 		color = Color3.fromRGB(255,120,80),
 		cmds = {
 			{label="glitch", alias="gl", toggle=true, on=".gl on", off=".gl off"},
@@ -392,10 +415,11 @@ local COMMAND_CATEGORIES = {
 			{label="antiafk", alias="aafk", toggle=true, on=".aafk on", off=".aafk off"},
 			{label="conn lock", alias="lcc", toggle=true, on=".lcc on", off=".lcc off"},
 			{label="reset", alias="rst", cmd=".reset"},
+			{label="ping", alias="ping", cmd=".ping"},
 		}
 	},
 	{
-		name = "Emotes",
+		name = "Emote",
 		color = Color3.fromRGB(80,220,180),
 		cmds = {
 			{label="wave", alias="wave", cmd=".wave"},
@@ -414,27 +438,29 @@ local COMMAND_CATEGORIES = {
 		cmds = {
 			{label="health", alias="hlth", cmd=".health"},
 			{label="position", alias="pos", cmd=".pos"},
-			{label="rig type", alias="rig", cmd=".rig"},
+			{label="rig", alias="rig", cmd=".rig"},
 			{label="operators", alias="ops", cmd=".ops"},
 			{label="status", alias="status", cmd=".status"},
-			{label="aliases", alias="aliases", cmd=".aliases"},
+			{label="server id", alias="sid", cmd=".serverid"},
+			{label="game id", alias="gid", cmd=".gameid"},
+			{label="aliases", alias="ali", cmd=".aliases"},
 			{label="unloop", alias="ul", cmd=".unloop"},
-			{label="savepos 1", alias="sav 1", cmd=".savepos 1"},
-			{label="savepos 2", alias="sav 2", cmd=".savepos 2"},
-			{label="savepos 3", alias="sav 3", cmd=".savepos 3"},
-			{label="loadpos 1", alias="lod 1", cmd=".loadpos 1"},
-			{label="loadpos 2", alias="lod 2", cmd=".loadpos 2"},
-			{label="loadpos 3", alias="lod 3", cmd=".loadpos 3"},
-			{label="sethealth", alias="hlth", input=true, base=".sethealth"},
+			{label="savepos 1", alias="sav1", cmd=".savepos 1"},
+			{label="savepos 2", alias="sav2", cmd=".savepos 2"},
+			{label="savepos 3", alias="sav3", cmd=".savepos 3"},
+			{label="loadpos 1", alias="lod1", cmd=".loadpos 1"},
+			{label="loadpos 2", alias="lod2", cmd=".loadpos 2"},
+			{label="loadpos 3", alias="lod3", cmd=".loadpos 3"},
+			{label="sethealth", alias="sh", input=true, base=".sethealth"},
 			{label="say", alias="say", input=true, base=".say"},
 			{label="connect", alias=".c", input=true, base=".c"},
 			{label="removeop", alias="rmop", input=true, base=".removeop"},
 			{label="loop cmd", alias="loop", input=true, base=".loop"},
+			{label="clearops", alias="clrop", cmd=".clearops"},
 		}
 	},
 }
 
-local activeCategory = 1
 local stepPresets = {5,10,20,50}
 local botsScrollRef = nil
 
@@ -579,40 +605,43 @@ local function createHelpPage()
 	end
 
 	addSection("GETTING STARTED", Color3.fromRGB(255,180,80))
-	addBlock("1. Run ROBOT script on your alt/bot account.\n2. On main account type .c BotUsername in chat.\n3. Bot gets a popup showing your name - click Accept.\n4. Type .quicktab to open the control panel.\n5. Use .help to open this page anytime.", Color3.fromRGB(255,180,80))
+	addBlock("1. Run ROBOT script on your alt/bot account.\n2. On main account type .c BotUsername in chat.\n3. Bot gets a popup showing your name - click Accept.\n4. Type .quicktab to open the control panel.\n5. Type .help to open this page anytime.\nSave: Operators saved to robot_operators.txt on bot. Bots saved to robot_bots.txt on operator.", Color3.fromRGB(255,180,80))
 
 	addSection("CONNECTION", Color3.fromRGB(100,200,255))
-	addBlock(".c [name]  —  Send connect request to a bot (they see your name)\n.cc  —  Accept/Deny (handled via popup button)\n.lcc on/off  (lockconn)  —  Lock so no new operators can connect\n.ops  —  List all connected operators on the bot\n.removeop [name]  (rmop)  —  Remove an operator from bot\n.all [cmd]  —  Broadcast a command to every bot at once", Color3.fromRGB(100,200,255))
+	addBlock(".c [name]  —  Send connect request to a bot (they see your name)\n.cc  —  Accept/Deny (handled automatically via popup)\n.lcc on/off  (lockconn)  —  Lock/unlock new operator connections\n.ops  —  List all connected operators\n.removeop [name]  (rmop)  —  Remove an operator\n.clearops  —  Remove ALL operators\n.all [cmd]  —  Broadcast a command to every bot\n.ping  —  Bot replies pong to confirm alive", Color3.fromRGB(100,200,255))
 
 	addSection("MOVEMENT", Color3.fromRGB(100,220,100))
-	addBlock(".follow [name/me]  (flw)  —  Follow a player continuously\n.stop  —  Stop all movement\n.goto [name]  (gt)  —  Walk to player once\n.orbit [name]  (orb)  —  Orbit around a player in circles\n.patrol [n1] [n2]  (ptr)  —  Patrol between players\n.looptp [name]  (ltp)  —  Continuously teleport onto player\n.fw / .bk / .lt / .rt [n]  —  Move directionally n studs\n.tl / .tr [deg]  —  Turn left/right by degrees\n.lookat [name]  (lk)  —  Face a player\n.tp [name or x y z]  —  Teleport to player or coordinates\n.tpme  —  Teleport bot to operator position\n.spin on/off  —  Continuously spin\n.jump  —  Make bot jump", Color3.fromRGB(100,220,100))
+	addBlock(".follow [name/me]  (flw)  —  Follow a player continuously\n.stop  —  Stop all following\n.goto [name]  (gt)  —  Walk to player once\n.walkto [x y z]  (wt)  —  Walk to coordinates\n.orbit [name]  (orb)  —  Orbit around a player\n.patrol [n1] [n2]  (ptr)  —  Patrol between players\n.looptp [name]  (ltp)  —  Continuously teleport onto player\n.fw / .bk / .lt / .rt [n]  —  Move directionally n studs\n.tl / .tr [deg]  —  Turn by degrees\n.lookat [name]  (lk)  —  Face toward a player\n.tp [name or x y z]  —  Teleport\n.tpme  —  Teleport bot to operator\n.spin on/off  —  Continuously spin\n.jump  —  Jump\n.jumpboost [n]  (jb)  —  Launch upward with force n", Color3.fromRGB(100,220,100))
 
-	addSection("PHYSICS & WORLD", Color3.fromRGB(180,100,255))
-	addBlock(".speed [n]  (spd)  —  Set walk speed. Default 16\n.jumppower [n]  (jp)  —  Set jump power. Default 50\n.gravity [n]  (grv)  —  Set world gravity\n.gravityoff  (goff)  —  Zero gravity\n.gravityreset  (grst)  —  Reset gravity to 196.2\n.float on/off  (fl)  —  Low gravity mode\n.noclip on/off  (nc)  —  Walk through walls\n.freeze  (frz)  /  .unfreeze  (ufrz)  —  Freeze or unfreeze bot\n.fling  —  Launch bot into the air", Color3.fromRGB(180,100,255))
+	addSection("PHYSICS", Color3.fromRGB(180,100,255))
+	addBlock(".speed [n / reset]  (spd)  —  Walk speed. Default 16\n.jumppower [n / reset]  (jp)  —  Jump power. Default 50\n.gravity [n]  (grv)  /  .gravityoff  /  .gravityreset\n.float on/off  (fl)  —  Low gravity mode\n.noclip on/off  (nc)  —  Walk through walls\n.freeze  (frz)  /  .unfreeze  (ufrz)\n.fly on/off  —  BodyGyro fly mode\n.swim on/off  —  Low gravity + high speed mode\n.fling  —  Launch randomly into air", Color3.fromRGB(180,100,255))
 
 	addSection("APPEARANCE", Color3.fromRGB(255,220,80))
-	addBlock(".invisible on/off  (inv)  —  FE invisible\n.transparency [0-1]  (trp)  —  Set body transparency\n.size [n]  (sz)  —  Scale character. 1 = normal\n.bighead on/off  (bh)  —  Large head\n.headless on/off  (hd)  —  Hide head\n.crouch on/off  (cr)  —  Crouch mode\n.walkanim on/off  (wa)  —  Toggle walk animation\n.fov [n]  —  Set field of view 1 to 120", Color3.fromRGB(255,220,80))
+	addBlock(".invisible on/off  (inv)\n.transparency [0-1]  (trp)\n.size [n / reset]  (sz)  —  1 = normal\n.bighead on/off  (bh)\n.headless on/off  (hd)\n.crouch on/off  (cr)\n.walkanim on/off  (wa)\n.nametag on/off  (nmt)\n.fov [n]  —  Field of view 1-120", Color3.fromRGB(255,220,80))
+
+	addSection("WORLD / ENVIRONMENT", Color3.fromRGB(80,180,255))
+	addBlock(".time [0-24]  —  Set time of day\n.brightness [0-10]  (br)  —  Set lighting brightness\n.fog [0-100]  —  Set fog density\n.ambient [r g b]  —  Set ambient light color (0-255 each)", Color3.fromRGB(80,180,255))
 
 	addSection("EFFECTS & CONTROL", Color3.fromRGB(255,120,80))
-	addBlock(".godmode on/off  (gm)  —  Disable killbricks nearby\n.glitch on/off  (gl)  —  Glitch movement effect\n.ragdoll on/off  (rg)  —  Ragdoll state\n.mirror on/off  (mir)  —  Copy operator movement\n.lockcontrol on/off  (lck)  —  Disable bot input\n.antiafk on/off  (aafk)  —  Prevent AFK kick\n.reset  (rst)  —  Kill and respawn\n.sethealth [n]  —  Set HP directly", Color3.fromRGB(255,120,80))
+	addBlock(".godmode on/off  (gm)\n.glitch on/off  (gl)\n.ragdoll on/off  (rg)\n.mirror on/off  (mir)  —  Copy operator movement\n.lockcontrol on/off  (lck)  —  Disable bot input\n.antiafk on/off  (aafk)\n.reset  /  .respawn  (rst)\n.sethealth [n]  —  Set HP\n.health  (hlth)  —  Show HP", Color3.fromRGB(255,120,80))
 
 	addSection("EMOTES", Color3.fromRGB(80,220,180))
-	addBlock(".wave  .laugh  .cheer  .point  .dance  .dance2  .dance3\n.e [name]  —  Play any emote by name", Color3.fromRGB(80,220,180))
+	addBlock(".wave  .laugh  .cheer  .point  .dance  .dance2  .dance3\n.e [name]  —  Any emote by name", Color3.fromRGB(80,220,180))
 
-	addSection("INFO COMMANDS", Color3.fromRGB(160,160,220))
-	addBlock(".health  (hlth)  —  Show current HP\n.pos  —  Show position coordinates\n.rig  —  Show R6 or R15\n.savepos [1/2/3]  (sav)  —  Save position to slot\n.loadpos [1/2/3]  (lod)  —  Return to saved position\n.status  —  Full bot status\n.aliases  —  List all short aliases\n.serverid  —  Show current server ID\n.gameid  —  Show current game name and ID", Color3.fromRGB(160,160,220))
+	addSection("INFO & MISC", Color3.fromRGB(160,160,220))
+	addBlock(".pos  —  Coordinates\n.rig  —  R6 or R15\n.savepos [1/2/3]  (sav)  /  .loadpos [1/2/3]  (lod)  —  3 position slots\n.status  —  Full bot status report\n.aliases  —  List all short aliases\n.serverid  —  Show server job ID\n.gameid  —  Show game name and place ID\n.ping  —  Check if bot is alive (replies pong)", Color3.fromRGB(160,160,220))
 
 	addSection("CHAT & LOOP", Color3.fromRGB(100,200,150))
-	addBlock(".say [text]  —  Bot sends message in public chat\n.loop [cmd]  —  Loop a command on bot side, no chat spam\n.loop [cmd] [interval]  —  Loop with custom interval in seconds\n.unloop  (ul)  —  Stop the current loop\nRight-click any Quick Tab button to start or stop looping it.", Color3.fromRGB(100,200,150))
+	addBlock(".say [text]  /  .chat [text]  —  Bot sends message in public chat\n.loop [cmd]  —  Loop command on bot side, no chat spam\n.loop [cmd] [interval]  —  Loop with interval in seconds\n.unloop  (ul)  —  Stop loop\nRight-click any Quick Tab button to loop/unloop.", Color3.fromRGB(100,200,150))
+
+	addSection("SAVE SYSTEM", Color3.fromRGB(255,160,60))
+	addBlock("Robot: Operators saved to robot_operators.txt (executor workspace folder). Falls back to SetAttribute if file API unavailable.\nOperator: Bot list saved to robot_bots.txt. Falls back to SetAttribute.\nBoth: Auto-saves on every change. Loads on script start.\nConnection is also auto-saved when a bot accepts a connect request.", Color3.fromRGB(255,160,60))
 
 	addSection("PREFIX & ALIASES", Color3.fromRGB(200,200,255))
-	addBlock("Both .cmd and . cmd (dot space) work as prefix.\nWhisper mode: commands sent as private messages, nobody sees them.\nShort aliases are shown on every Quick Tab button as [alias].\nAll aliases: spd sp jp jmp fw bk bw lt rt tl tr flw gt inv gm nc frz ufrz rst lk ltp mir lck sav lod trp sz ul grv goff grst fl bh cr orb ptr hlth hd rg gl aafk wa lcc lockconn", Color3.fromRGB(200,200,255))
-
-	addSection("QUICK TAB GUIDE", Color3.fromRGB(255,160,60))
-	addBlock("Type .quicktab to open or close the panel.\nCategories across the top — click to switch.\nLeft-click: send command once.\nRight-click: toggle loop on/off for that command.\nToggle buttons: green = on, grey = off.\nArgument box: type name/number then click [n] buttons.\nBot row: click bot name to switch active bot.\nS = Settings panel.  ? = This help page.", Color3.fromRGB(255,160,60))
+	addBlock("Both .cmd and . cmd (dot space) work.\nWhisper OFF by default - enable in Settings for private commands.\nAll aliases: spd jp fw bk lt rt tl tr flw gt wt inv gm nc frz ufrz rst lk ltp mir lck sav lod trp sz ul grv goff grst fl bh cr orb ptr hlth hd rg gl aafk wa lcc nmt jb br", Color3.fromRGB(200,200,255))
 
 	addSection("LEGAL & CREDITS", Color3.fromRGB(150,150,170))
-	addBlock("Robot Control Script\nCreated by zumartengge6no10 for personal use.\nPersonal use only. Do not redistribute or claim as your own.\nAll features are client-side on your own character only.\nUse responsibly and within Roblox Terms of Service.\nThe author is not responsible for any account actions taken by Roblox.\n(c) 2025 zumartengge6no10 - All rights reserved.", Color3.fromRGB(150,150,170))
+	addBlock("Robot Control Script\nCreated by zumartengge6no10 for personal use only.\nDo not redistribute or claim as your own.\nAll commands are client-side on your own character.\nUse responsibly and within Roblox Terms of Service.\nThe author is not responsible for any moderation actions.\n(c) 2025 zumartengge6no10 - All rights reserved.", Color3.fromRGB(150,150,170))
 
 	local closeBottomBtn = Instance.new("TextButton")
 	closeBottomBtn.Size = UDim2.new(0,sw,0,32)
@@ -743,6 +772,7 @@ local function createSettingsGui()
 			if ch then
 				if useWhisper then ch:SendAsync("/w "..botName.." .c") else ch:SendAsync(".c") end
 				notify("Connecting","Sent to "..botName,2,Color3.fromRGB(100,180,255))
+				addToLog("Connect sent to "..botName)
 			end
 		else notify("Error","Enter username.",2,Color3.fromRGB(255,100,100)) end
 	end)
@@ -846,7 +876,7 @@ createQuickTab = function()
 	local settBtn = Instance.new("TextButton")
 	settBtn.Size = UDim2.new(0,24,0,24) settBtn.Position = UDim2.new(1,-78,0,2) settBtn.BackgroundColor3 = Color3.fromRGB(40,40,60)
 	settBtn.Text = "S" settBtn.TextColor3 = Color3.fromRGB(180,180,220) settBtn.TextScaled = true settBtn.Font = Enum.Font.GothamBold settBtn.BorderSizePixel = 0 settBtn.Parent = titleBar
-	local sc = Instance.new("UICorner") sc.CornerRadius = UDim.new(0,4) sc.Parent = settBtn
+	local sc2 = Instance.new("UICorner") sc2.CornerRadius = UDim.new(0,4) sc2.Parent = settBtn
 	settBtn.MouseButton1Click:Connect(function()
 		settingsVisible = not settingsVisible
 		settBtn.BackgroundColor3 = settingsVisible and Color3.fromRGB(80,80,40) or Color3.fromRGB(40,40,60)
@@ -891,7 +921,7 @@ createQuickTab = function()
 	botLbl.TextXAlignment = Enum.TextXAlignment.Left botLbl.Parent = botRowFrame
 
 	local statusLabel = Instance.new("TextLabel")
-	statusLabel.Size = UDim2.new(0,120,1,0) statusLabel.Position = UDim2.new(1,-120,0,0)
+	statusLabel.Size = UDim2.new(0,130,1,0) statusLabel.Position = UDim2.new(1,-130,0,0)
 	statusLabel.BackgroundTransparency = 1 statusLabel.Text = "OFFLINE"
 	statusLabel.TextColor3 = Color3.fromRGB(255,80,80) statusLabel.TextScaled = true statusLabel.Font = Enum.Font.GothamBold
 	statusLabel.TextXAlignment = Enum.TextXAlignment.Right statusLabel.Parent = botRowFrame
@@ -903,14 +933,13 @@ createQuickTab = function()
 
 	if not hasConnected then
 		local noBotBtn = Instance.new("TextButton")
-		noBotBtn.Size = UDim2.new(0,innerW-160,1,0) noBotBtn.Position = UDim2.new(0,32,0,0)
-		noBotBtn.BackgroundColor3 = Color3.fromRGB(60,40,20) noBotBtn.Text = "Connect a bot first - click here"
+		noBotBtn.Size = UDim2.new(0,innerW-170,1,0) noBotBtn.Position = UDim2.new(0,32,0,0)
+		noBotBtn.BackgroundColor3 = Color3.fromRGB(60,40,20) noBotBtn.Text = "Connect a bot - click here"
 		noBotBtn.TextColor3 = Color3.fromRGB(255,180,80) noBotBtn.TextScaled = true noBotBtn.Font = Enum.Font.GothamBold noBotBtn.BorderSizePixel = 0 noBotBtn.Parent = botRowFrame
 		local nbc = Instance.new("UICorner") nbc.CornerRadius = UDim.new(0,4) nbc.Parent = noBotBtn
 		noBotBtn.MouseButton1Click:Connect(function() settingsVisible=true createSettingsGui() end)
 	else
-		local maxBots = math.floor((innerW-160)/64)
-		local botBtnW = math.min(math.floor((innerW-160)/math.max(#bots,1)),60)
+		local botBtnW = math.min(math.floor((innerW-170)/math.max(#bots,1)),60)
 		for i, bot in ipairs(bots) do
 			if bot.name~="" then
 				local bb = Instance.new("TextButton")
@@ -970,7 +999,7 @@ createQuickTab = function()
 	yOff = yOff + 22
 
 	local catBarFrame = Instance.new("Frame")
-	catBarFrame.Size = UDim2.new(0,innerW,0,22) catBarFrame.Position = UDim2.new(0,8,0,yOff) catBarFrame.BackgroundTransparency = 1 catBarFrame.Parent = frame
+	catBarFrame.Size = UDim2.new(0,innerW,0,20) catBarFrame.Position = UDim2.new(0,8,0,yOff) catBarFrame.BackgroundTransparency = 1 catBarFrame.Parent = frame
 	local catBtnW = math.floor(innerW / #COMMAND_CATEGORIES) - 2
 	local catBtns = {}
 	for i, cat in ipairs(COMMAND_CATEGORIES) do
@@ -983,14 +1012,16 @@ createQuickTab = function()
 		if i==activeCategory then local cs=Instance.new("UIStroke") cs.Color=cat.color cs.Thickness=1 cs.Parent=cb end
 		catBtns[i] = cb
 	end
-	yOff = yOff + 26
+	yOff = yOff + 24
 
 	local divider = Instance.new("Frame")
 	divider.Size = UDim2.new(0,innerW,0,1) divider.Position = UDim2.new(0,8,0,yOff)
 	divider.BackgroundColor3 = Color3.fromRGB(255,180,80) divider.BackgroundTransparency = 0.7 divider.BorderSizePixel = 0 divider.Parent = frame
 	yOff = yOff + 4
 
-	local cmdAreaH = guiHeight - yOff - 6
+	local logPanelH = 70
+	local cmdAreaH = guiHeight - yOff - logPanelH - 28
+
 	local cmdScrollFrame = Instance.new("ScrollingFrame")
 	cmdScrollFrame.Size = UDim2.new(0,innerW,0,cmdAreaH) cmdScrollFrame.Position = UDim2.new(0,8,0,yOff)
 	cmdScrollFrame.BackgroundTransparency = 1 cmdScrollFrame.BorderSizePixel = 0 cmdScrollFrame.ScrollBarThickness = 3
@@ -999,10 +1030,8 @@ createQuickTab = function()
 
 	local cellW = math.floor((innerW-6)/4)
 	local gridLayout = Instance.new("UIGridLayout")
-	gridLayout.CellSize = UDim2.new(0,cellW,0,26) gridLayout.CellPadding = UDim2.new(0,3,0,3) gridLayout.SortOrder = Enum.SortOrder.LayoutOrder gridLayout.Parent = cmdScrollFrame
+	gridLayout.CellSize = UDim2.new(0,cellW,0,28) gridLayout.CellPadding = UDim2.new(0,3,0,3) gridLayout.SortOrder = Enum.SortOrder.LayoutOrder gridLayout.Parent = cmdScrollFrame
 	local gpad = Instance.new("UIPadding") gpad.PaddingTop = UDim.new(0,3) gpad.PaddingLeft = UDim.new(0,0) gpad.Parent = cmdScrollFrame
-
-	local cmdButtons = {}
 
 	local function populateCategory(catIndex)
 		for _, child in ipairs(cmdScrollFrame:GetChildren()) do
@@ -1016,34 +1045,46 @@ createQuickTab = function()
 		for j, catBtnRef in ipairs(catBtns) do
 			catBtnRef.BackgroundColor3 = (j==catIndex) and Color3.fromRGB(30,30,50) or Color3.fromRGB(18,18,28)
 			catBtnRef.TextColor3 = (j==catIndex) and COMMAND_CATEGORIES[j].color or Color3.fromRGB(100,100,130)
-			for _, child in ipairs(catBtnRef:GetChildren()) do
-				if child:IsA("UIStroke") then child:Destroy() end
-			end
+			for _, child in ipairs(catBtnRef:GetChildren()) do if child:IsA("UIStroke") then child:Destroy() end end
 			if j==catIndex then local cs=Instance.new("UIStroke") cs.Color=COMMAND_CATEGORIES[j].color cs.Thickness=1 cs.Parent=catBtnRef end
 		end
 
 		for i, data in ipairs(cat.cmds) do
 			local btn = Instance.new("TextButton")
-			btn.Size = UDim2.new(0,cellW,0,26) btn.BorderSizePixel = 0 btn.AutoButtonColor = true btn.Parent = cmdScrollFrame
+			btn.Size = UDim2.new(0,cellW,0,28) btn.BorderSizePixel = 0 btn.AutoButtonColor = true btn.Parent = cmdScrollFrame
 			local bc = Instance.new("UICorner") bc.CornerRadius = UDim.new(0,4) bc.Parent = btn
 			local bs = Instance.new("UIStroke") bs.Color = Color3.fromRGB(50,50,80) bs.Thickness = 1 bs.Parent = btn
 
-			local displayText = data.label.."\n["..data.alias.."]"
-			btn.Text = displayText btn.TextScaled = false btn.TextSize = 10 btn.Font = Enum.Font.Gotham
+			local mainLbl = Instance.new("TextLabel")
+			mainLbl.Size = UDim2.new(1,0,0,14) mainLbl.Position = UDim2.new(0,0,0,2)
+			mainLbl.BackgroundTransparency = 1 mainLbl.Text = data.label
+			mainLbl.TextScaled = true mainLbl.Font = Enum.Font.GothamBold
+			mainLbl.TextXAlignment = Enum.TextXAlignment.Center mainLbl.Parent = btn
+
+			local aliasLbl = Instance.new("TextLabel")
+			aliasLbl.Size = UDim2.new(1,0,0,11) aliasLbl.Position = UDim2.new(0,0,0,15)
+			aliasLbl.BackgroundTransparency = 1 aliasLbl.Text = "["..data.alias.."]"
+			aliasLbl.TextScaled = true aliasLbl.Font = Enum.Font.Gotham
+			aliasLbl.TextXAlignment = Enum.TextXAlignment.Center aliasLbl.Parent = btn
 
 			if data.toggle then
 				toggleStates[i] = false
-				btn.BackgroundColor3 = Color3.fromRGB(40,40,58) btn.TextColor3 = Color3.fromRGB(160,160,190)
+				btn.BackgroundColor3 = Color3.fromRGB(40,40,58)
+				mainLbl.TextColor3 = Color3.fromRGB(160,160,190)
+				aliasLbl.TextColor3 = Color3.fromRGB(100,100,130)
 				btn.MouseButton1Click:Connect(function()
 					toggleStates[i] = not toggleStates[i]
 					local state = toggleStates[i]
 					local cmd = state and data.on or data.off
 					btn.BackgroundColor3 = state and Color3.fromRGB(25,90,45) or Color3.fromRGB(40,40,58)
-					btn.TextColor3 = state and Color3.fromRGB(80,230,130) or Color3.fromRGB(160,160,190)
+					mainLbl.TextColor3 = state and Color3.fromRGB(80,230,130) or Color3.fromRGB(160,160,190)
+					aliasLbl.TextColor3 = state and Color3.fromRGB(60,180,100) or Color3.fromRGB(100,100,130)
 					sendCommand(cmd)
 				end)
 			else
-				btn.BackgroundColor3 = Color3.fromRGB(22,22,38) btn.TextColor3 = Color3.fromRGB(200,200,240)
+				btn.BackgroundColor3 = Color3.fromRGB(22,22,38)
+				mainLbl.TextColor3 = Color3.fromRGB(200,200,240)
+				aliasLbl.TextColor3 = Color3.fromRGB(100,100,150)
 				btn.MouseButton1Click:Connect(function()
 					local full = ""
 					if data.cmd then full = data.cmd
@@ -1078,35 +1119,44 @@ createQuickTab = function()
 	end
 
 	populateCategory(activeCategory)
+	yOff = yOff + cmdAreaH + 4
 
-	local logPanel = Instance.new("Frame")
-	logPanel.Size = UDim2.new(0,innerW,0,0)
-	logPanel.Position = UDim2.new(0,8,1,-4)
-	logPanel.BackgroundColor3 = Color3.fromRGB(10,10,16) logPanel.BorderSizePixel = 0 logPanel.ClipsDescendants = true logPanel.Parent = frame
-	local lpc = Instance.new("UICorner") lpc.CornerRadius = UDim.new(0,6) lpc.Parent = logPanel
-	local lps = Instance.new("UIStroke") lps.Color = Color3.fromRGB(50,50,80) lps.Thickness = 1 lps.Parent = logPanel
+	local logToggleBar = Instance.new("Frame")
+	logToggleBar.Size = UDim2.new(0,innerW,0,20) logToggleBar.Position = UDim2.new(0,8,0,yOff)
+	logToggleBar.BackgroundColor3 = Color3.fromRGB(16,16,24) logToggleBar.BorderSizePixel = 0 logToggleBar.Parent = frame
+	local ltbc = Instance.new("UICorner") ltbc.CornerRadius = UDim.new(0,4) ltbc.Parent = logToggleBar
+	local logToggleLbl = Instance.new("TextLabel")
+	logToggleLbl.Size = UDim2.new(0,60,1,0) logToggleLbl.BackgroundTransparency = 1 logToggleLbl.Text = "Log"
+	logToggleLbl.TextColor3 = Color3.fromRGB(120,120,160) logToggleLbl.TextScaled = true logToggleLbl.Font = Enum.Font.GothamBold
+	logToggleLbl.TextXAlignment = Enum.TextXAlignment.Left logToggleLbl.Position = UDim2.new(0,6,0,0) logToggleLbl.Parent = logToggleBar
+	local logClearBtn = Instance.new("TextButton")
+	logClearBtn.Size = UDim2.new(0,48,0,16) logClearBtn.Position = UDim2.new(1,-52,0,2)
+	logClearBtn.BackgroundColor3 = Color3.fromRGB(80,20,20) logClearBtn.Text = "Clear"
+	logClearBtn.TextColor3 = Color3.fromRGB(255,255,255) logClearBtn.TextScaled = true logClearBtn.Font = Enum.Font.Gotham logClearBtn.BorderSizePixel = 0 logClearBtn.Parent = logToggleBar
+	local lclc = Instance.new("UICorner") lclc.CornerRadius = UDim.new(0,3) lclc.Parent = logClearBtn
+	logClearBtn.MouseButton1Click:Connect(function()
+		cmdLog = {}
+		if logScrollRef then
+			for _, child in ipairs(logScrollRef:GetChildren()) do
+				if not child:IsA("UIListLayout") then child:Destroy() end
+			end
+		end
+	end)
+	yOff = yOff + 22
 
-	local logToggleBtn = Instance.new("TextButton")
-	logToggleBtn.Size = UDim2.new(0,80,0,16) logToggleBtn.Position = UDim2.new(0,8,1,-20)
-	logToggleBtn.BackgroundColor3 = Color3.fromRGB(20,20,32) logToggleBtn.Text = "Log"
-	logToggleBtn.TextColor3 = Color3.fromRGB(120,120,160) logToggleBtn.TextScaled = true logToggleBtn.Font = Enum.Font.Gotham logToggleBtn.BorderSizePixel = 0 logToggleBtn.Parent = frame
-	local ltbc = Instance.new("UICorner") ltbc.CornerRadius = UDim.new(0,4) ltbc.Parent = logToggleBtn
-	local logOpen = false
+	local logFrame = Instance.new("Frame")
+	logFrame.Size = UDim2.new(0,innerW,0,logPanelH-22) logFrame.Position = UDim2.new(0,8,0,yOff)
+	logFrame.BackgroundColor3 = Color3.fromRGB(10,10,16) logFrame.BorderSizePixel = 0 logFrame.ClipsDescendants = true logFrame.Parent = frame
+	local lfc = Instance.new("UICorner") lfc.CornerRadius = UDim.new(0,5) lfc.Parent = logFrame
+	local lfs = Instance.new("UIStroke") lfs.Color = Color3.fromRGB(40,40,70) lfs.Thickness = 1 lfs.Parent = logFrame
 
 	local logScroll = Instance.new("ScrollingFrame")
-	logScroll.Size = UDim2.new(1,-8,1,-4) logScroll.Position = UDim2.new(0,4,0,2)
+	logScroll.Size = UDim2.new(1,-6,1,-4) logScroll.Position = UDim2.new(0,3,0,2)
 	logScroll.BackgroundTransparency = 1 logScroll.BorderSizePixel = 0 logScroll.ScrollBarThickness = 2
 	logScroll.ScrollBarImageColor3 = Color3.fromRGB(80,80,120) logScroll.CanvasSize = UDim2.new(0,0,0,0)
-	logScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y logScroll.Parent = logPanel
+	logScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y logScroll.Parent = logFrame
 	local logLayout = Instance.new("UIListLayout") logLayout.Padding = UDim.new(0,1) logLayout.SortOrder = Enum.SortOrder.LayoutOrder logLayout.Parent = logScroll
 	logScrollRef = logScroll
-
-	logToggleBtn.MouseButton1Click:Connect(function()
-		logOpen = not logOpen
-		TweenService:Create(logPanel,TweenInfo.new(0.2,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Size=UDim2.new(0,innerW,0,logOpen and 80 or 0)}):Play()
-		TweenService:Create(logPanel,TweenInfo.new(0.2,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Position=UDim2.new(0,8,1,logOpen and -88 or -4)}):Play()
-		logToggleBtn.TextColor3 = logOpen and Color3.fromRGB(180,180,255) or Color3.fromRGB(120,120,160)
-	end)
 
 	addToLog("QuickTab opened")
 
@@ -1125,9 +1175,13 @@ local function handleChatMessage(message, player)
 			local response = parts[2] and parts[2]:lower()
 			if response=="accepted" then
 				notify("Connected",player.Name.." accepted.",3,Color3.fromRGB(80,255,120))
-				addToLog("Connected: "..player.Name)
+				addToLog("Bot accepted: "..player.Name)
 			elseif response=="denied" then
 				notify("Denied",player.Name.." denied.",3,Color3.fromRGB(255,80,80))
+				addToLog("Bot denied: "..player.Name)
+			elseif response=="pong" then
+				notify("Pong",player.Name.." is alive.",2,Color3.fromRGB(100,200,255))
+				addToLog("Pong from: "..player.Name)
 			end
 			return
 		end
@@ -1163,7 +1217,7 @@ localPlayer.Chatted:Connect(function(message)
 end)
 
 if not hasSeenLanding then
-	localPlayer:SetAttribute(SEEN_KEY, true)
+	pcall(function() localPlayer:SetAttribute(SEEN_KEY, true) end)
 	task.wait(1)
 	createHelpPage()
 	notify("Operator Ready","Type .quicktab to open panel",4,Color3.fromRGB(255,180,80))
